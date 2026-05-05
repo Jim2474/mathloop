@@ -1,0 +1,131 @@
+[
+  {
+    "id": "book001-ch01-p006-q001",
+    "bookName": "考研数学复习全书样例",
+    "chapter": "第一章 函数、极限、连续",
+    "section": "选择题",
+    "questionNo": "例 1-1 选择题",
+    "pageStart": 6,
+    "pageEnd": 6,
+    "pdfPageLabel": "PDF 第 12 页",
+    "printedPageNumber": "6",
+    "pageRangeText": "P006",
+    "questionText": "求极限的基础选择题。",
+    "questionImage": "questions/book001_ch01_p006_q001.png",
+    "questionImages": ["questions/book001_ch01_p006_q001.png"],
+    "answerImage": "answers/book001_ch01_p006_q001_answer.png",
+    "answerImages": ["answers/book001_ch01_p006_q001_answer.png"],
+    "knowledgeTags": ["极限", "等价无穷小"],
+    "mistakeTags": ["公式混淆"],
+    "difficulty": 2,
+    "valueStar": 4,
+    "status": "new",
+    "fsrs": {
+      "state": "new",
+      "difficulty": null,
+      "stability": null,
+      "retrievability": null,
+      "lastReview": null,
+      "nextReview": null,
+      "reviewCount": 0,
+      "lapseCount": 0
+    },
+    "review": {
+      "mastery": 0,
+      "lastResult": null,
+      "history": []
+    },
+    "meta": {
+      "source": "OpenClaw sample",
+      "uncertain": false,
+      "note": "样例题，用于验证主图和答案图显示。"
+    }
+  },
+  {
+    "id": "book001-ch01-p008-q002",
+    "bookName": "考研数学复习全书样例",
+    "chapter": "第一章 函数、极限、连续",
+    "section": "填空题",
+    "questionNo": "例 1-2 填空题",
+    "pageStart": 8,
+    "pageEnd": 8,
+    "pdfPageLabel": "PDF 第 14 页",
+    "printedPageNumber": "8",
+    "pageRangeText": "P008",
+    "questionText": "连续性判断的填空题。",
+    "questionImage": "questions/book001_ch01_p008_q002.png",
+    "questionImages": ["questions/book001_ch01_p008_q002.png"],
+    "answerImage": "",
+    "answerImages": [],
+    "knowledgeTags": ["连续", "间断点"],
+    "mistakeTags": [],
+    "difficulty": 3,
+    "valueStar": 3,
+    "status": "new",
+    "fsrs": {
+      "state": "new",
+      "difficulty": null,
+      "stability": null,
+      "retrievability": null,
+      "lastReview": null,
+      "nextReview": null,
+      "reviewCount": 0,
+      "lapseCount": 0
+    },
+    "review": {
+      "mastery": 0,
+      "lastResult": null,
+      "history": []
+    },
+    "meta": {
+      "source": "OpenClaw sample",
+      "uncertain": true,
+      "note": "样例题，用于验证 uncertain 筛选和无答案图片状态。"
+    }
+  },
+  {
+    "id": "book001-ch02-p021-q003",
+    "bookName": "考研数学复习全书样例",
+    "chapter": "第二章 一元函数微分学",
+    "section": "解答题",
+    "questionNo": "例 2-1 解答题",
+    "pageStart": 21,
+    "pageEnd": 22,
+    "pdfPageLabel": "PDF 第 27-28 页",
+    "printedPageNumber": "21-22",
+    "pageRangeText": "P021-P022",
+    "questionText": "导数应用的综合解答题。",
+    "questionImage": "questions/book001_ch02_p021_q003.png",
+    "questionImages": [
+      "questions/book001_ch02_p021_q003.png",
+      "questions/book001_ch02_p022_q003_part2.png"
+    ],
+    "answerImage": "",
+    "answerImages": [],
+    "knowledgeTags": ["导数", "单调性"],
+    "mistakeTags": ["计算错误"],
+    "difficulty": 4,
+    "valueStar": 5,
+    "status": "new",
+    "fsrs": {
+      "state": "new",
+      "difficulty": null,
+      "stability": null,
+      "retrievability": null,
+      "lastReview": null,
+      "nextReview": null,
+      "reviewCount": 0,
+      "lapseCount": 0
+    },
+    "review": {
+      "mastery": 0,
+      "lastResult": null,
+      "history": []
+    },
+    "meta": {
+      "source": "OpenClaw sample",
+      "uncertain": false,
+      "note": "样例题，用于验证多图 questionImages 展示。"
+    }
+  }
+]

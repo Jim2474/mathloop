@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family:
+    "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  background: #f8f4ec;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(184, 80, 66, 0.22);
+}
