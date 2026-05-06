@@ -12,8 +12,16 @@ export type Question = {
   questionText: string;
   questionImage: string;
   questionImages: string[];
-  answerImage: string;
-  answerImages: string[];
+  answerImage?: string | null;
+  answerImages?: string[] | null;
+  answerMeta?: {
+    source?: string;
+    answerPageStart?: number;
+    answerPageEnd?: number;
+    printedPageNumber?: string;
+    uncertain?: boolean;
+    note?: string;
+  };
   knowledgeTags: string[];
   mistakeTags: string[];
   difficulty: number;

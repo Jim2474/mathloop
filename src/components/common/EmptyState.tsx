@@ -5,9 +5,9 @@ type EmptyStateProps = {
 
 export default function EmptyState({ title, description }: EmptyStateProps) {
   return (
-    <div className="rounded-lg border border-dashed border-line bg-white/55 p-8 text-center">
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
-      {description ? <p className="mt-2 text-sm text-ink/60">{description}</p> : null}
+    <div className="apple-glass rounded-[18px] p-10 text-center">
+      <h2 className="text-xl font-semibold tracking-[-0.28px] text-ink">{title}</h2>
+      {description ? <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-ink/58">{description}</p> : null}
     </div>
   );
 }

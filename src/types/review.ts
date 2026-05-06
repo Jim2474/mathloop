@@ -43,6 +43,55 @@ export type ReviewSettings = {
   desiredRetention: number;
 };
 
+export type ReviewMistakeRecord = {
+  questionId: string;
+  markedAt: string;
+  reviewAt: string;
+  sourcePage: string;
+  sourceQuestionNo: string;
+  note: string;
+  active: boolean;
+};
+
+export type ReviewQuestionFingerprint = {
+  id: string;
+  chapter: string;
+  section: string;
+  questionNo: string;
+  pageRangeText: string;
+  questionImage: string;
+  answerImage: string;
+  answerImages: string[];
+  metaUncertain: boolean;
+  answerMetaUncertain: boolean | null;
+};
+
+export type ReviewSyncResult = {
+  syncedAt: string;
+  initializedCards: number;
+  changedFingerprints: number;
+  orphanCards: number;
+  totalCards: number;
+};
+
+export type ReviewCleanupResult = {
+  removedCards: number;
+  removedReviewLogs: number;
+  removedMistakeRecords: number;
+  removedFingerprints: number;
+};
+
+export type ReviewBackupData = {
+  version: number;
+  exportedAt: string;
+  cards: Record<string, ReviewCardRecord>;
+  reviewLogs: ReviewLog[];
+  settings: ReviewSettings;
+  mistakeRecords?: Record<string, ReviewMistakeRecord>;
+  questionFingerprints?: Record<string, ReviewQuestionFingerprint>;
+  lastSyncResult?: ReviewSyncResult | null;
+};
+
 export type ReviewQueueKind = "due" | "new";
 
 export type ReviewQueueItem = {

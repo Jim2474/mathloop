@@ -5,16 +5,16 @@ type StatCardProps = {
 };
 
 const toneClass = {
-  default: "border-line bg-white/70",
-  accent: "border-cinnabar/30 bg-cinnabar/10",
-  cool: "border-slateblue/25 bg-slateblue/10",
+  default: "",
+  accent: "",
+  cool: "",
 };
 
 export default function StatCard({ label, value, tone = "default" }: StatCardProps) {
   return (
-    <div className={`rounded-lg border p-5 shadow-soft ${toneClass[tone]}`}>
-      <p className="text-sm text-ink/60">{label}</p>
-      <p className="mt-3 text-4xl font-semibold tracking-normal text-ink">{value}</p>
+    <div className={`apple-tile rounded-[22px] px-6 py-5 ${toneClass[tone]}`}>
+      <p className="text-[13px] tracking-[-0.12px] text-ink/45">{label}</p>
+      <p className="mt-4 text-[2.65rem] font-semibold leading-none tracking-[-0.36px] text-ink">{value}</p>
     </div>
   );
 }

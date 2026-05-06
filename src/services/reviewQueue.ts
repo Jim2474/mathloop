@@ -2,6 +2,7 @@ import type { Question } from "../types/question";
 import type {
   ReviewCardRecord,
   ReviewLog,
+  ReviewMistakeRecord,
   ReviewQueueItem,
   ReviewSettings,
 } from "../types/review";
@@ -11,6 +12,7 @@ type ReviewQueueParams = {
   questions: Question[];
   cards: Record<string, ReviewCardRecord>;
   reviewLogs: ReviewLog[];
+  mistakeRecords: Record<string, ReviewMistakeRecord>;
   settings: ReviewSettings;
   now?: Date;
 };
@@ -19,31 +21,29 @@ export function buildTodayReviewQueue({
   questions,
   cards,
   reviewLogs,
+  mistakeRecords,
   settings,
   now = new Date(),
 }: ReviewQueueParams): ReviewQueueItem[] {
-  const reviewedToday = new Set(
-    reviewLogs
-      .filter((log) => isSameLocalDay(log.reviewedAt, now))
-      .map((log) => log.questionId),
-  );
   const loggedQuestionIds = new Set(reviewLogs.map((log) => log.questionId));
+  const mistakeQuestionIds = new Set(
+    Object.values(mistakeRecords ?? {})
+      .filter((record) => record.active)
+      .map((record) => record.questionId),
+  );
+  const mistakeQuestions = questions.filter((question) => mistakeQuestionIds.has(question.id));
 
-  if (reviewLogs.length === 0) {
-    return questions
-      .filter((question) => isNewQuestion(question.id, cards, loggedQuestionIds))
-      .slice(0, settings.maxDailyReviews)
-      .map((question) => ({
-        questionId: question.id,
-        kind: "new",
-        due: cards[question.id]?.card.due ?? now.toISOString(),
-      }));
-  }
-
-  const dueItems = questions
-    .map((question) => ({ question, card: cards[question.id] }))
+  const dueItems = mistakeQuestions
+    .map((question) => ({
+      question,
+      card: cards[question.id],
+    }))
     .filter(({ question, card }) => {
-      if (!card || reviewedToday.has(question.id) || isNewQuestion(question.id, cards, loggedQuestionIds)) {
+      if (!card) {
+        return false;
+      }
+      const mistake = mistakeRecords?.[question.id];
+      if (wasReviewedAfterMistakeMarked(question.id, mistake, reviewLogs, now)) {
         return false;
       }
       const due = parseDate(card.card.due);
@@ -53,24 +53,30 @@ export function buildTodayReviewQueue({
     .slice(0, settings.maxDailyReviews)
     .map<ReviewQueueItem>(({ question, card }) => ({
       questionId: question.id,
-      kind: "due",
+      kind: isNewQuestion(question.id, cards, loggedQuestionIds) ? "new" : "due",
       due: card.card.due,
     }));
+  return dueItems;
+}
 
-  const remainingSlots = Math.max(0, settings.maxDailyReviews - dueItems.length);
-  const newLimit = Math.min(settings.maxNewPerDay, remainingSlots);
-  const dueIds = new Set(dueItems.map((item) => item.questionId));
-  const newItems = questions
-    .filter((question) => !dueIds.has(question.id))
-    .filter((question) => isNewQuestion(question.id, cards, loggedQuestionIds))
-    .slice(0, newLimit)
-    .map<ReviewQueueItem>((question) => ({
-      questionId: question.id,
-      kind: "new",
-      due: cards[question.id]?.card.due ?? now.toISOString(),
-    }));
-
-  return [...dueItems, ...newItems];
+function wasReviewedAfterMistakeMarked(
+  questionId: string,
+  mistake: ReviewMistakeRecord | undefined,
+  reviewLogs: ReviewLog[],
+  now: Date,
+): boolean {
+  if (!mistake) {
+    return false;
+  }
+  const markedAt = parseDate(mistake.markedAt);
+  return reviewLogs.some((log) => {
+    const reviewedAt = parseDate(log.reviewedAt);
+    return (
+      log.questionId === questionId &&
+      isSameLocalDay(log.reviewedAt, now) &&
+      Boolean(markedAt && reviewedAt && reviewedAt >= markedAt)
+    );
+  });
 }
 
 export function isQuestionCompletedToday(

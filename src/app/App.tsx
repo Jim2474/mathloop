@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "../components/layout/AppShell";
 import BackupPage from "../pages/BackupPage";
 import DashboardPage from "../pages/DashboardPage";
+import MistakeEntryPage from "../pages/MistakeEntryPage";
 import QuestionDetailPage from "../pages/QuestionDetailPage";
 import QuestionListPage from "../pages/QuestionListPage";
 import ReviewPage from "../pages/ReviewPage";
@@ -12,7 +13,7 @@ import { useReviewStore } from "../store/useReviewStore";
 export default function App() {
   const loadQuestions = useQuestionStore((state) => state.loadQuestions);
   const questions = useQuestionStore((state) => state.questions);
-  const initializeCards = useReviewStore((state) => state.initializeCards);
+  const syncQuestionLibrary = useReviewStore((state) => state.syncQuestionLibrary);
 
   useEffect(() => {
     void loadQuestions();
@@ -20,14 +21,15 @@ export default function App() {
 
   useEffect(() => {
     if (questions.length > 0) {
-      initializeCards(questions);
+      syncQuestionLibrary(questions);
     }
-  }, [initializeCards, questions]);
+  }, [questions, syncQuestionLibrary]);
 
   return (
     <AppShell>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/mistakes" element={<MistakeEntryPage />} />
         <Route path="/questions" element={<QuestionListPage />} />
         <Route path="/questions/:id" element={<QuestionDetailPage />} />
         <Route path="/review" element={<ReviewPage />} />

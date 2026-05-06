@@ -5,15 +5,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#1d2733",
-        paper: "#f8f4ec",
-        line: "#d8cfc0",
-        moss: "#426857",
-        cinnabar: "#b85042",
-        slateblue: "#415a77",
+        ink: "#1d1d1f",
+        paper: "#f5f5f7",
+        line: "#d2d2d7",
+        moss: "#0066cc",
+        cinnabar: "#ff3b30",
+        slateblue: "#0066cc",
       },
       boxShadow: {
-        soft: "0 18px 45px rgba(66, 56, 42, 0.12)",
+        soft: "0 18px 55px rgba(0, 0, 0, 0.08)",
+        float: "0 28px 90px rgba(0, 0, 0, 0.12)",
       },
     },
   },

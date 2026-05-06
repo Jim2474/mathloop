@@ -11,7 +11,7 @@ import { stateLabel } from "../utils/reviewLabels";
 export default function QuestionDetailPage() {
   const { id } = useParams();
   const { questions, isLoading, error } = useQuestionStore();
-  const { cards, getQuestionLogs } = useReviewStore();
+  const { cards, getQuestionLogs, mistakeRecords } = useReviewStore();
   const question = questions.find((item) => item.id === id);
 
   if (isLoading) {
@@ -38,19 +38,21 @@ export default function QuestionDetailPage() {
   const questionType = inferQuestionType(question);
   const reviewCard = cards[question.id];
   const questionLogs = getQuestionLogs(question.id);
+  const mistakeRecord = mistakeRecords[question.id];
 
   return (
     <div className="space-y-6">
-      <Link to="/questions" className="text-sm font-medium text-slateblue hover:underline">
+      <Link to="/questions" className="apple-ghost-pill inline-flex w-fit px-4 py-2 text-sm font-semibold text-ink/62">
         返回题库
       </Link>
 
-      <section className="rounded-lg border border-line bg-white/70 p-5 shadow-soft">
+      <section className="apple-glass rounded-[28px] p-6 md:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="font-mono text-sm font-semibold text-slateblue">{question.id}</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-normal">{question.questionNo}</h2>
-            <p className="mt-2 text-sm text-ink/65">{question.bookName}</p>
+            <p className="apple-kicker">Question Detail</p>
+            <p className="mt-3 font-mono text-sm font-semibold text-slateblue">{question.id}</p>
+            <h2 className="mt-2 text-4xl font-semibold tracking-[-0.28px] md:text-5xl">{question.questionNo}</h2>
+            <p className="mt-3 text-sm text-ink/58">{question.bookName}</p>
           </div>
           <span
             className={[
@@ -73,16 +75,35 @@ export default function QuestionDetailPage() {
           <MetaItem label="状态" value={question.status || "未设置"} />
         </div>
 
+        <div className="apple-soft-card mt-5 flex flex-col gap-3 rounded-[22px] p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold">
+              {mistakeRecord?.active ? "已加入错题复习" : "未加入错题复习"}
+            </p>
+            <p className="mt-1 text-sm text-ink/60">
+              {mistakeRecord?.active
+                ? `下次复习：${formatDateTime(reviewCard?.card.due ?? mistakeRecord.reviewAt)}`
+                : "题库中的题不会自动进入复习队列。"}
+            </p>
+          </div>
+          <Link
+            to="/mistakes"
+            className="apple-pill w-fit px-5 py-2.5 text-sm font-semibold"
+          >
+            去错题录入
+          </Link>
+        </div>
+
         {question.meta.note ? (
-          <div className="mt-5 rounded-md border border-cinnabar/25 bg-cinnabar/8 p-4 text-sm leading-6 text-ink/75">
+          <div className="mt-5 rounded-[20px] border border-cinnabar/18 bg-cinnabar/8 p-4 text-sm leading-6 text-ink/75 backdrop-blur">
             <span className="font-semibold text-cinnabar">备注：</span>
             {question.meta.note}
           </div>
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-line bg-white/70 p-5 shadow-soft">
-        <h3 className="text-xl font-semibold">FSRS 复习状态</h3>
+      <section className="apple-tile rounded-[26px] p-6">
+        <h3 className="text-2xl font-semibold tracking-[-0.28px]">FSRS 复习状态</h3>
         {reviewCard ? (
           <>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -92,7 +113,7 @@ export default function QuestionDetailPage() {
               <MetaItem label="遗忘次数" value={reviewCard.card.lapses} />
               <MetaItem label="最近复习" value={formatDateTime(reviewCard.card.last_review)} />
             </div>
-            <div className="mt-5 rounded-md border border-line bg-paper/65 p-4 text-sm text-ink/65">
+            <div className="apple-soft-card mt-5 rounded-[20px] p-4 text-sm text-ink/65">
               数据来源：{reviewCard.seededFromJson ? "OpenClaw JSON 初始导入" : "本地 ts-fsrs card"}
             </div>
           </>
@@ -101,10 +122,10 @@ export default function QuestionDetailPage() {
         )}
       </section>
 
-      <section className="rounded-lg border border-line bg-white/70 p-5 shadow-soft">
-        <h3 className="text-xl font-semibold">复习历史</h3>
+      <section className="apple-tile rounded-[26px] p-6">
+        <h3 className="text-2xl font-semibold tracking-[-0.28px]">复习历史</h3>
         {questionLogs.length > 0 ? (
-          <div className="mt-4 divide-y divide-line/70">
+          <div className="mt-4 divide-y divide-white/42">
             {questionLogs.map((log) => (
               <div key={log.id} className="grid gap-2 py-4 md:grid-cols-[1fr_1fr_1fr_1fr] md:items-center">
                 <div>
@@ -122,8 +143,8 @@ export default function QuestionDetailPage() {
         )}
       </section>
 
-      <section className="space-y-4">
-        <h3 className="text-xl font-semibold">题目截图</h3>
+      <section className="apple-tile rounded-[26px] p-6">
+        <h3 className="mb-4 text-2xl font-semibold tracking-[-0.28px]">题目截图</h3>
         {questionImagePaths.length > 0 ? (
           <div className="space-y-4">
             {questionImagePaths.map((path, index) => (
@@ -139,8 +160,8 @@ export default function QuestionDetailPage() {
         )}
       </section>
 
-      <section className="space-y-4">
-        <h3 className="text-xl font-semibold">答案图片</h3>
+      <section className="apple-tile rounded-[26px] p-6">
+        <h3 className="mb-4 text-2xl font-semibold tracking-[-0.28px]">答案图片</h3>
         {answerImagePaths.length > 0 ? (
           <div className="space-y-4">
             {answerImagePaths.map((path, index) => (
@@ -161,7 +182,7 @@ export default function QuestionDetailPage() {
 
 function MetaItem({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-line bg-paper/70 p-3">
+    <div className="apple-soft-card rounded-[20px] p-4">
       <p className="text-xs font-semibold text-ink/50">{label}</p>
       <p className="mt-1 text-sm font-medium text-ink">{value || "未标注"}</p>
     </div>

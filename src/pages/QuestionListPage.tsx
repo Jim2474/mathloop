@@ -45,19 +45,22 @@ export default function QuestionListPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-line bg-white/70 p-5 shadow-soft">
+    <div className="space-y-6">
+      <section className="apple-glass rounded-[28px] p-6 md:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold tracking-normal">题库列表</h2>
-            <p className="mt-1 text-sm text-ink/60">
-              共 {questions.length} 题，当前显示 {visibleQuestions.length} 题。
+            <p className="apple-kicker">Question Library</p>
+            <h2 className="mt-3 text-4xl font-semibold tracking-[-0.28px] md:text-5xl">
+              Browse the source of truth.
+            </h2>
+            <p className="mt-4 text-sm leading-6 text-ink/58">
+              共 {questions.length} 题，当前显示 {visibleQuestions.length} 题。题目内容始终来自最新 questions.json。
             </p>
           </div>
           <button
             type="button"
             onClick={resetFilters}
-            className="w-fit rounded-md border border-line bg-paper px-4 py-2 text-sm font-medium text-ink transition hover:bg-white"
+            className="apple-ghost-pill w-fit px-5 py-2.5 text-sm font-semibold text-ink/68 hover:text-slateblue"
           >
             重置筛选
           </button>
@@ -69,7 +72,7 @@ export default function QuestionListPage() {
             <select
               value={selectedChapter}
               onChange={(event) => setSelectedChapter(event.target.value)}
-              className="w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-moss"
+              className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
             >
               <option value="all">全部章节</option>
               {chapters.map((chapter) => (
@@ -85,7 +88,7 @@ export default function QuestionListPage() {
             <select
               value={selectedSection}
               onChange={(event) => setSelectedSection(event.target.value)}
-              className="w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-moss"
+              className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
             >
               <option value="all">全部小节</option>
               {sections.map((section) => (
@@ -101,7 +104,7 @@ export default function QuestionListPage() {
             <select
               value={uncertainFilter}
               onChange={(event) => setUncertainFilter(event.target.value as UncertainFilter)}
-              className="w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-moss"
+              className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
             >
               <option value="all">全部</option>
               <option value="uncertain">仅 uncertain</option>
@@ -115,7 +118,7 @@ export default function QuestionListPage() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="id / 题号 / 页码"
-              className="w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-moss"
+              className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
             />
           </label>
         </div>
@@ -124,8 +127,8 @@ export default function QuestionListPage() {
       {visibleQuestions.length === 0 ? (
         <EmptyState title="没有匹配的题目" description="可以调整筛选条件或检查 OpenClaw 导出数据。" />
       ) : (
-        <section className="overflow-hidden rounded-lg border border-line bg-white/75 shadow-soft">
-          <div className="hidden grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] gap-3 border-b border-line bg-ink px-4 py-3 text-xs font-semibold uppercase tracking-wide text-paper lg:grid">
+        <section className="apple-tile overflow-hidden rounded-[26px]">
+          <div className="hidden grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] gap-3 border-b border-white/46 bg-white/34 px-5 py-3 text-xs font-semibold uppercase text-ink/48 lg:grid">
             <span>ID</span>
             <span>书名</span>
             <span>章节</span>
@@ -134,12 +137,12 @@ export default function QuestionListPage() {
             <span>页码</span>
             <span>状态</span>
           </div>
-          <div className="divide-y divide-line/70">
+          <div className="divide-y divide-white/42">
             {visibleQuestions.map((question) => (
               <Link
                 key={question.id}
                 to={`/questions/${encodeURIComponent(question.id)}`}
-                className="grid gap-2 px-4 py-4 transition hover:bg-moss/8 lg:grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] lg:items-center lg:gap-3"
+                className="grid gap-2 px-5 py-4 transition hover:bg-white/42 lg:grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] lg:items-center lg:gap-3"
               >
                 <span className="font-mono text-sm font-semibold text-slateblue">{question.id}</span>
                 <span className="text-sm text-ink/75">{question.bookName}</span>

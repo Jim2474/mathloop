@@ -1,146 +1,196 @@
-# 考研数学练习册题目数据
+# MathLoop
 
-## 书本信息
+Smart review for math mistakes. MathLoop is a fully local React app for managing an OpenClaw-exported math question bank, marking only selected questions as mistakes, and reviewing them with FSRS scheduling.
 
-- 书名: 高等数学基础篇·严选题
-- 作者: 武忠祥
-- 出版社: 中国农业出版社
-- 总页数: 114 页（扫描 PDF）
-- 页码偏移: PDF页码 = 印刷页码 + 5
+## Current Status
 
-## 数据统计
+- App name: MathLoop
+- Runtime: Vite + React + TypeScript
+- Review engine: `ts-fsrs`
+- Data source: `public/data/questions.json`
+- Static assets: `public/questions/` and `public/answers/`
+- Local review state: browser `localStorage`, key `openclaw-review-state`
+- Backend: none
+- Login/cloud sync: none
 
-- 总题数: 222
-- 精确裁切: 222 道（全部精确裁切）
-- Uncertain: 0 道
-- 覆盖章节: 第一章到第九章
-- 答案匹配: 222 道（100%）
-- 答案图片: 233 张
+## Feature Overview
 
-## 章节覆盖
+- Dashboard with Apple-style glass UI and study metrics.
+- Question library loaded from the current `questions.json`.
+- Question detail pages that always show the latest static question data.
+- Mistake intake by page number and question number.
+- FSRS review flow for manually marked mistakes.
+- Answer image display through `answerImage` and `answerImages`.
+- Incremental question-bank sync that preserves local cards and review logs.
+- Backup/export/import for local review state.
+- Data health checks for orphan cards, missing images, uncertain fields, empty chapters, and empty question numbers.
+- Manual cleanup for orphan local review data with confirmation.
 
-| 章 | 名称 | 印刷页码 | 题数 | 状态 |
-|-----|------|----------|------|------|
-| 1 | 第一章 函数 极限 连续 | 1-13 | 13 | 精确裁切 |
-| 2 | 第二章 导数与微分 | 14-21 | 20 | 精确裁切 |
-| 3 | 第三章 微分中值定理及导数应用 | 22-30 | 25 | 精确裁切 |
-| 4 | 第四章 不定积分 | 31-35 | 11 | 精确裁切 |
-| 5 | 第五章 定积分与反常积分 | 37-46 | 29 | 精确裁切 |
-| 6 | 第六章 定积分的应用 | 47-52 | 16 | 精确裁切 |
-| 7 | 第七章 微分方程 | 53-62 | 36 | 精确裁切 |
-| 8 | 第八章 多元函数微分学 | 63-74 | 44 | 精确裁切 |
-| 9 | 第九章 二重积分 | 75-82 | 28 | 精确裁切 |
+## Data Snapshot
 
-## 目录结构
+The current checked-in question bank contains:
 
+| Item | Count |
+| --- | ---: |
+| Questions | 256 |
+| Question images | 256 |
+| Answer images | 256 |
+| Chapters | 9 |
+| `meta.uncertain` | 0 |
+| `answerMeta.uncertain` | 0 |
+
+Chapter coverage:
+
+| Chapter | Count |
+| --- | ---: |
+| 第一章 函数 极限 连续 | 39 |
+| 第二章 导数与微分 | 24 |
+| 第三章 微分中值定理及导数应用 | 28 |
+| 第四章 不定积分 | 17 |
+| 第五章 定积分与反常积分 | 32 |
+| 第六章 定积分的应用 | 18 |
+| 第七章 微分方程 | 34 |
+| 第八章 多元函数微分学 | 40 |
+| 第九章 二重积分 | 24 |
+
+## Project Structure
+
+```text
+public/
+  data/questions.json        # OpenClaw question-bank source of truth
+  questions/                 # question images referenced by questionImage/questionImages
+  answers/                   # answer images referenced by answerImage/answerImages
+src/
+  app/                       # app bootstrap and question loading
+  components/                # layout, dashboard, common, question image components
+  pages/                     # dashboard, mistakes, questions, review, backup pages
+  services/                  # FSRS, backup, sync, queue, lookup helpers
+  store/                     # Zustand question and review stores
+  types/                     # real OpenClaw Question shape and review state types
+  utils/                     # date, image path, stats, filters
 ```
-math-review-data/
-├─ questions.json           # 题目数据（JSON 数组，222 条记录）
-├─ questions/               # 精确裁切的题目图片
-├─ answers/                 # 答案图片（233 张）
-├─ pages/                   # 全页渲染图（2x 分辨率 1190x1682）
-├─ README.md                # 本文件
-├─ PROJECT.md               # 工程规范文档
-├─ crop_ch7_9.py            # 第七到九章裁切脚本
-├─ extract_answers.py       # 答案提取脚本
-└─ verify_data.py           # 数据验收脚本
-```
 
-## ID 格式
+## Data Model Rules
 
-```
-book001_ch{章节号}_p{PDF页码}_q{题号}
-示例: book001_ch01_p006_q001
-```
+`questions.json` is the source of truth for question content and image paths. The app does not write FSRS data, mistake records, or backup state back into `questions.json`.
 
-- 章节号两位数: ch01, ch02, ...
-- PDF 页码三位数: p006, p012, ...
-- 题号三位数: q001, q002, ...
-- 只用英文、数字、下划线
-- 不能重复
+Question image paths are stored as public-relative paths, for example:
 
-## 答案提取说明
-
-答案已从PDF答案区域提取并匹配到对应题目。
-
-### 答案页对应关系
-
-| 章 | 答案PDF页码 | 答案图片数 |
-|-----|------------|-----------|
-| 1 | 18 | 13 |
-| 2 | 26 | 20 |
-| 3 | 35 | 25 |
-| 4 | 40-41 | 22 |
-| 5 | 51 | 29 |
-| 6 | 57 | 16 |
-| 7 | 67 | 36 |
-| 8 | 79 | 44 |
-| 9 | 87 | 28 |
-
-### 答案图片命名规则
-
-- 单页答案: `answers/{题目id}_answer.png`
-- 多页答案: `answers/{题目id}_answer_1.png`, `answers/{题目id}_answer_2.png`
-
-### 答案JSON字段
-
-每道题新增以下字段：
 ```json
 {
+  "questionImage": "questions/book001_ch01_p006_q001.png",
   "answerImage": "answers/book001_ch01_p006_q001_answer.png",
   "answerImages": [],
   "answerMeta": {
     "source": "pdf_answer_section",
-    "answerPageStart": 18,
-    "answerPageEnd": 18,
-    "printedPageNumber": "",
-    "uncertain": false,
-    "note": ""
+    "uncertain": false
   }
 }
 ```
 
-## 验收标准
+At render time, these paths are resolved as static public assets such as `/questions/...` and `/answers/...`.
 
-### 题目数据验收
-- [x] questions.json 是标准 JSON 数组
-- [x] 总题数 >= 127（当前 222）
-- [x] 所有题目均为精确裁切
-- [x] 无重复 ID
-- [x] 所有 questionImage 路径存在
-- [x] 所有必需字段完整
-- [x] FSRS 结构完整
-- [x] Review 结构完整
-- [x] Meta 结构完整
-- [x] ID 格式正确
+## Incremental Sync
 
-### 答案数据验收
-- [x] 所有题目均有答案图片
-- [x] 所有 answerImage 路径存在
-- [x] answerMeta 字段完整
-- [x] 无 uncertain 答案
-- [x] 第四章答案跨页正确处理
-- [x] 原有字段未被修改
+When the app loads `public/data/questions.json`, it synchronizes the local review store:
 
-## 裁切坐标说明
+- New `question.id` values get initialized as FSRS cards.
+- Existing cards and `reviewLogs` are preserved.
+- Updated question fields are displayed from the latest `questions.json`.
+- Local cards whose `questionId` no longer exists are marked as orphan data.
+- Orphan data is not removed automatically.
 
-所有裁切坐标均为 2x 分辨率像素（页面尺寸 1190×1682）。
+The Backup page includes:
 
-裁切方法：
-```python
-import pymupdf
+- Last sync result.
+- Current pending sync differences.
+- Manual "重新同步题库" action.
+- Manual "清理孤儿复习记录" action with confirmation.
 
-pdf = pymupdf.open(PDF_PATH)
-page = pdf[pdf_page - 1]  # 0-indexed
-mat = pymupdf.Matrix(2, 2)
-clip = pymupdf.Rect(0, top_px / 2, 1190 / 2, bottom_px / 2)
-pix = page.get_pixmap(matrix=mat, clip=clip)
-pix.save(output_path)
+## Review Workflow
+
+1. Open `错题录入`.
+2. Enter page number and question number.
+3. Pick the matched question.
+4. Choose a review time.
+5. Open `复习` when the mistake is due.
+6. Reveal the answer and rate it with Again, Hard, Good, or Easy.
+
+Only manually marked mistakes enter the review queue.
+
+## Backup And Health Checks
+
+The Backup page can:
+
+- Export local review state as JSON.
+- Import a backup with overwrite confirmation.
+- Reset local review state with double confirmation.
+- Edit review settings:
+  - `maxDailyReviews`
+  - `maxNewPerDay`
+  - `desiredRetention`
+- Inspect data health:
+  - question total
+  - local card count
+  - pending new questions
+  - changed fingerprints
+  - orphan card count
+  - orphan review-log count
+  - missing question images
+  - missing answer images
+  - uncertain question count
+  - uncertain answer metadata count
+  - empty chapter count
+  - empty question-number count
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
-## 更新日志
+Run the dev server:
 
-- 2026-05-06: 完成第一到九章全部精确裁切，共 222 道题
-- 2026-05-06: 移除第十到十二章数据（超出范围）
-- 2026-05-06: 所有题目均为精确裁切，无 uncertain 标记
-- 2026-05-06: 完成答案提取，222 道题全部匹配答案，生成 233 张答案图片
+```bash
+npm run dev
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+Preview the production build:
+
+```bash
+npm run preview
+```
+
+## Design Direction
+
+The UI uses a restrained Apple-inspired glass style:
+
+- light atmospheric background
+- translucent floating navigation
+- soft glass cards
+- subtle white borders
+- restrained blue accent
+- large but quiet typography
+- compact capsule buttons
+
+The design target is calm, local, focused, and trustworthy rather than decorative.
+
+## GitHub
+
+Primary repository:
+
+- <https://github.com/Jim2474/mathloop>
+
+There is also a separate data remote configured locally:
+
+- <https://github.com/Jim2474/math_review_data>
+
+For this app, push code and static app assets to `origin` / `Jim2474/mathloop` unless intentionally publishing a data-only package.
