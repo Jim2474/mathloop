@@ -1,13 +1,18 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { buildFingerprintMap, getLibrarySyncPreview } from "../services/librarySyncService";
 import { REVIEW_STORAGE_KEY, normalizeSettings } from "../services/backupService";
+import {
+  createReviewPersistStorage,
+  removePersistedReviewState,
+} from "../services/reviewPersistStorage";
 import type { Question } from "../types/question";
 import type {
   ReviewCardRecord,
   ReviewCleanupResult,
   ReviewLog,
   ReviewMistakeRecord,
+  ReplaceMistakeQuestionInput,
   ReviewQuestionFingerprint,
   ReviewRating,
   ReviewSettings,
@@ -26,6 +31,8 @@ type ReviewState = {
   questionFingerprints: Record<string, ReviewQuestionFingerprint>;
   lastSyncResult: ReviewSyncResult | null;
   settings: ReviewSettings;
+  hasHydrated: boolean;
+  setHasHydrated: (hasHydrated: boolean) => void;
   initializeCards: (questions: Question[]) => void;
   syncQuestionLibrary: (questions: Question[]) => ReviewSyncResult;
   cleanupOrphanReviewData: (questions: Question[]) => ReviewCleanupResult;
@@ -38,6 +45,7 @@ type ReviewState = {
     sourceQuestionNo: string;
     note?: string;
   }) => ReviewMistakeRecord;
+  replaceMistakeQuestion: (input: ReplaceMistakeQuestionInput) => ReviewMistakeRecord | null;
   removeMistakeQuestion: (questionId: string) => void;
   updateSettings: (settings: Partial<ReviewSettings>) => void;
   importReviewState: (state: {
@@ -60,6 +68,8 @@ export const useReviewStore = create<ReviewState>()(
       questionFingerprints: {},
       lastSyncResult: null,
       settings: defaultReviewSettings,
+      hasHydrated: false,
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       initializeCards: (questions) => {
         get().syncQuestionLibrary(questions);
       },
@@ -216,6 +226,55 @@ export const useReviewStore = create<ReviewState>()(
 
         return record;
       },
+      replaceMistakeQuestion: ({ fromQuestionId, toQuestionId, sourcePage, sourceQuestionNo }) => {
+        const state = get();
+        const fromRecord = state.mistakeRecords[fromQuestionId];
+        const targetRecord = state.mistakeRecords[toQuestionId];
+
+        if (!fromRecord || !fromRecord.active) {
+          return null;
+        }
+
+        if (toQuestionId !== fromQuestionId && targetRecord?.active) {
+          return null;
+        }
+
+        const timestamp = new Date().toISOString();
+        const nextRecord: ReviewMistakeRecord = {
+          ...fromRecord,
+          questionId: toQuestionId,
+          sourcePage: sourcePage.trim() || fromRecord.sourcePage,
+          sourceQuestionNo: sourceQuestionNo.trim() || fromRecord.sourceQuestionNo,
+          markedAt: timestamp,
+          active: true,
+        };
+
+        set((currentState) => {
+          const currentFromRecord = currentState.mistakeRecords[fromQuestionId];
+          const currentTargetRecord = currentState.mistakeRecords[toQuestionId];
+
+          if (!currentFromRecord?.active) {
+            return currentState;
+          }
+
+          if (toQuestionId !== fromQuestionId && currentTargetRecord?.active) {
+            return currentState;
+          }
+
+          const mistakeRecords = { ...currentState.mistakeRecords };
+          if (toQuestionId !== fromQuestionId) {
+            mistakeRecords[fromQuestionId] = {
+              ...currentFromRecord,
+              active: false,
+            };
+          }
+          mistakeRecords[toQuestionId] = nextRecord;
+
+          return { mistakeRecords };
+        });
+
+        return nextRecord;
+      },
       removeMistakeQuestion: (questionId) =>
         set((state) => {
           const current = state.mistakeRecords[questionId];
@@ -249,7 +308,7 @@ export const useReviewStore = create<ReviewState>()(
           lastSyncResult: reviewState.lastSyncResult ?? null,
         }),
       resetReviewState: (questions) => {
-        localStorage.removeItem(REVIEW_STORAGE_KEY);
+        removePersistedReviewState(REVIEW_STORAGE_KEY);
         const now = new Date();
         const cards = Object.fromEntries(
           questions.map((question) => [
@@ -275,6 +334,10 @@ export const useReviewStore = create<ReviewState>()(
     }),
     {
       name: REVIEW_STORAGE_KEY,
+      storage: createJSONStorage(() => createReviewPersistStorage()),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         cards: state.cards,
         reviewLogs: state.reviewLogs,

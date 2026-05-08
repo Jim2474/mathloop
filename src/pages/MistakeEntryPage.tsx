@@ -1,6 +1,7 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
+import QuestionThumbnail from "../components/question/QuestionThumbnail";
 import {
   findQuestionsByPageAndNumber,
   getQuestionLookupLabel,
@@ -10,6 +11,34 @@ import { useReviewStore } from "../store/useReviewStore";
 import type { Question } from "../types/question";
 import type { ReviewMistakeRecord } from "../types/review";
 import { formatDateTime, parseDateTimeLocal, toDateTimeLocalValue } from "../utils/date";
+
+type BatchSectionKey = "choice" | "fill" | "solution";
+
+const batchSections: Array<{
+  key: BatchSectionKey;
+  title: string;
+  section: string;
+  placeholder: string;
+}> = [
+  {
+    key: "choice",
+    title: "选择题题号",
+    section: "一、选择题",
+    placeholder: "例如 1 3 5-8",
+  },
+  {
+    key: "fill",
+    title: "填空题题号",
+    section: "二、填空题",
+    placeholder: "例如 2 4 6",
+  },
+  {
+    key: "solution",
+    title: "解答题题号",
+    section: "三、解答题",
+    placeholder: "例如 1 2 7-9",
+  },
+];
 
 export default function MistakeEntryPage() {
   const { questions, isLoading, error } = useQuestionStore();
@@ -21,6 +50,20 @@ export default function MistakeEntryPage() {
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [batchChapter, setBatchChapter] = useState("");
+  const [batchChoiceInput, setBatchChoiceInput] = useState("");
+  const [batchFillInput, setBatchFillInput] = useState("");
+  const [batchSolutionInput, setBatchSolutionInput] = useState("");
+  const [batchReviewAtInput, setBatchReviewAtInput] = useState(() =>
+    toDateTimeLocalValue(getDefaultReviewAt()),
+  );
+  const [batchMessage, setBatchMessage] = useState<string | null>(null);
+  const [batchError, setBatchError] = useState<string | null>(null);
+
+  const chapters = useMemo(
+    () => Array.from(new Set(questions.map((question) => question.chapter).filter(Boolean))),
+    [questions],
+  );
 
   const matches = useMemo(
     () =>
@@ -45,6 +88,12 @@ export default function MistakeEntryPage() {
       .sort((left, right) => left.record.reviewAt.localeCompare(right.record.reviewAt));
   }, [mistakeRecords, questions]);
 
+  useEffect(() => {
+    if (!batchChapter && chapters.length > 0) {
+      setBatchChapter(chapters[0]);
+    }
+  }, [batchChapter, chapters]);
+
   function setQuickReviewTime(kind: "now" | "tonight" | "tomorrow") {
     const next = new Date();
     if (kind === "now") {
@@ -56,6 +105,23 @@ export default function MistakeEntryPage() {
       next.setHours(9, 0, 0, 0);
     }
     setReviewAtInput(toDateTimeLocalValue(next));
+  }
+
+  function setBatchQuickReviewTime(kind: "now" | "tomorrow") {
+    const next = new Date();
+    if (kind === "tomorrow") {
+      next.setDate(next.getDate() + 1);
+      next.setHours(9, 0, 0, 0);
+    } else {
+      next.setSeconds(0, 0);
+    }
+    setBatchReviewAtInput(toDateTimeLocalValue(next));
+  }
+
+  function stopEnterSubmit(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+    }
   }
 
   useEffect(() => {
@@ -109,6 +175,13 @@ export default function MistakeEntryPage() {
       return;
     }
 
+    if (mistakeRecords[selectedQuestion.id]?.active) {
+      setMessage(`${selectedQuestion.questionNo} 已在错题本，未重复录入。`);
+      setQuestionNoInput("");
+      setSelectedQuestionId("");
+      return;
+    }
+
     markMistakeQuestion({
       question: selectedQuestion,
       reviewAt,
@@ -119,6 +192,98 @@ export default function MistakeEntryPage() {
 
     setMessage(`${selectedQuestion.questionNo} 已加入错题复习，时间：${formatDateTime(reviewAt.toISOString())}`);
     setNote("");
+    setQuestionNoInput("");
+    setSelectedQuestionId("");
+  }
+
+  function handleBatchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBatchMessage(null);
+    setBatchError(null);
+
+    const reviewAt = parseDateTimeLocal(batchReviewAtInput);
+    if (!reviewAt) {
+      setBatchError("请选择有效的批量复习时间。");
+      return;
+    }
+
+    if (!batchChapter) {
+      setBatchError("请先选择章节。");
+      return;
+    }
+
+    const inputBySection: Record<BatchSectionKey, string> = {
+      choice: batchChoiceInput,
+      fill: batchFillInput,
+      solution: batchSolutionInput,
+    };
+    const requestedItems = batchSections.flatMap((section) =>
+      parseQuestionNumbers(inputBySection[section.key]).map((questionNo) => ({
+        section: section.section,
+        questionNo,
+      })),
+    );
+
+    if (requestedItems.length === 0) {
+      setBatchError("请至少填写一个题号。支持空格、逗号和 1-5 这样的范围。");
+      return;
+    }
+
+    const activeIds = new Set(
+      Object.values(mistakeRecords ?? {})
+        .filter((record) => record.active)
+        .map((record) => record.questionId),
+    );
+    const batchSeenIds = new Set<string>();
+    const addedQuestions: Question[] = [];
+    const skippedQuestions: Question[] = [];
+    const missingLabels: string[] = [];
+
+    for (const item of requestedItems) {
+      const question = findBatchQuestion({
+        questions,
+        chapter: batchChapter,
+        section: item.section,
+        questionNo: item.questionNo,
+      });
+
+      if (!question) {
+        missingLabels.push(`${item.section.replace(/^[一二三]、/, "")} ${item.questionNo}`);
+        continue;
+      }
+
+      if (activeIds.has(question.id) || batchSeenIds.has(question.id)) {
+        skippedQuestions.push(question);
+        continue;
+      }
+
+      markMistakeQuestion({
+        question,
+        reviewAt,
+        sourcePage: question.printedPageNumber || String(question.pageStart),
+        sourceQuestionNo: question.questionNo,
+        note: "",
+      });
+      activeIds.add(question.id);
+      batchSeenIds.add(question.id);
+      addedQuestions.push(question);
+    }
+
+    if (addedQuestions.length > 0) {
+      setBatchChoiceInput("");
+      setBatchFillInput("");
+      setBatchSolutionInput("");
+    }
+
+    const missingText =
+      missingLabels.length > 0 ? `，未找到 ${missingLabels.slice(0, 8).join("、")}` : "";
+    setBatchMessage(
+      `批量录入完成：新增 ${addedQuestions.length} 题，已存在跳过 ${skippedQuestions.length} 题${missingText}。`,
+    );
+
+    if (addedQuestions.length === 0 && missingLabels.length > 0) {
+      setBatchError("没有新增题目，请检查章节、题型和题号是否对应。");
+    }
   }
 
   if (isLoading) {
@@ -152,17 +317,113 @@ export default function MistakeEntryPage() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="space-y-5">
+          <form onSubmit={handleBatchSubmit} className="apple-tile rounded-[26px] p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="apple-kicker">Batch Intake</p>
+                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.28px]">按章节批量录入</h3>
+                <p className="mt-2 text-sm leading-6 text-ink/56">
+                  选择章节后，把选择题、填空题、解答题的错题题号分别填进去。推荐用空格分隔，连续题号用短横线，例如 1 3 5-8。
+                </p>
+              </div>
+              <span className="w-fit rounded-full bg-white/48 px-3 py-1 text-xs font-semibold text-ink/52">
+                默认每日 10 题
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span className="font-medium text-ink/70">章节</span>
+                <select
+                  value={batchChapter}
+                  onChange={(event) => setBatchChapter(event.target.value)}
+                  className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
+                >
+                  {chapters.map((chapter) => (
+                    <option key={chapter} value={chapter}>
+                      {chapter}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium text-ink/70">批量复习时间</span>
+                <input
+                  type="datetime-local"
+                  value={batchReviewAtInput}
+                  onChange={(event) => setBatchReviewAtInput(event.target.value)}
+                  className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
+                />
+              </label>
+
+              <div className="flex flex-wrap items-end gap-2">
+                <QuickTimeButton label="现在开始排队" onClick={() => setBatchQuickReviewTime("now")} />
+                <QuickTimeButton label="明早 09:00" onClick={() => setBatchQuickReviewTime("tomorrow")} />
+              </div>
+
+              {batchSections.map((section) => {
+                const value =
+                  section.key === "choice"
+                    ? batchChoiceInput
+                    : section.key === "fill"
+                      ? batchFillInput
+                      : batchSolutionInput;
+                const updateValue =
+                  section.key === "choice"
+                    ? setBatchChoiceInput
+                    : section.key === "fill"
+                      ? setBatchFillInput
+                      : setBatchSolutionInput;
+
+                return (
+                  <label key={section.key} className="space-y-1 text-sm md:col-span-2">
+                    <span className="font-medium text-ink/70">{section.title}</span>
+                    <textarea
+                      value={value}
+                      onChange={(event) => updateValue(event.target.value)}
+                      rows={2}
+                      placeholder={section.placeholder}
+                      className="apple-control w-full resize-y rounded-[20px] px-4 py-3 text-sm"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            {(batchMessage || batchError) && (
+              <div
+                className={[
+                  "mt-4 rounded-[18px] border p-3 text-sm backdrop-blur",
+                  batchError
+                    ? "border-cinnabar/30 bg-cinnabar/10 text-cinnabar"
+                    : "border-moss/30 bg-moss/10 text-moss",
+                ].join(" ")}
+              >
+                {batchError ?? batchMessage}
+              </div>
+            )}
+
+            <button type="submit" className="apple-pill mt-5 w-full px-4 py-3 text-sm font-semibold">
+              批量加入错题
+            </button>
+          </form>
+
         <form onSubmit={handleSubmit} className="apple-tile rounded-[26px] p-6">
           <h3 className="text-2xl font-semibold tracking-[-0.28px]">录入错题</h3>
-          <p className="mt-2 text-sm leading-6 text-ink/56">输入最少信息，保留最高确定性。</p>
+          <p className="mt-2 text-sm leading-6 text-ink/56">
+            页码默认按书本印刷页搜索。回车只保留当前匹配结果，不会直接加入错题本。
+          </p>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <label className="space-y-1 text-sm">
-              <span className="font-medium text-ink/70">页码</span>
+              <span className="font-medium text-ink/70">书本印刷页码</span>
               <input
                 name="page"
                 value={pageInput}
                 onChange={(event) => setPageInput(event.target.value)}
-                placeholder="例如 6"
+                onKeyDown={stopEnterSubmit}
+                placeholder="例如 25"
                 className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
               />
             </label>
@@ -173,6 +434,7 @@ export default function MistakeEntryPage() {
                 name="questionNo"
                 value={questionNoInput}
                 onChange={(event) => setQuestionNoInput(event.target.value)}
+                onKeyDown={stopEnterSubmit}
                 placeholder="例如 1"
                 className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
               />
@@ -241,17 +503,22 @@ export default function MistakeEntryPage() {
                           onChange={() => setSelectedQuestionId(question.id)}
                           className="mt-1"
                         />
-                        <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-semibold text-slateblue">
-                            {question.id}
-                          </p>
-                          <p className="mt-1 text-sm text-ink/70">{getQuestionLookupLabel(question)}</p>
-                          <p className="mt-1 truncate text-xs text-ink/55">{question.chapter}</p>
-                          {alreadyMarked ? (
-                            <span className="mt-2 inline-flex rounded-full bg-cinnabar/12 px-3 py-1 text-xs font-semibold text-cinnabar">
-                              已在错题本
-                            </span>
-                          ) : null}
+                        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start">
+                          <QuestionThumbnail question={question} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-mono text-sm font-semibold text-slateblue">
+                              {question.id}
+                            </p>
+                            <p className="mt-1 text-sm text-ink/70">{getQuestionLookupLabel(question)}</p>
+                            <p className="mt-1 truncate text-xs text-ink/55">
+                              {question.chapter} / {question.section}
+                            </p>
+                            {alreadyMarked ? (
+                              <span className="mt-2 inline-flex rounded-full bg-cinnabar/12 px-3 py-1 text-xs font-semibold text-cinnabar">
+                                已在错题本
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </label>
@@ -281,6 +548,7 @@ export default function MistakeEntryPage() {
             标记为错题
           </button>
         </form>
+        </div>
 
         <section className="apple-tile rounded-[26px] p-6">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -358,6 +626,63 @@ function QuickTimeButton({ label, onClick }: { label: string; onClick: () => voi
       {label}
     </button>
   );
+}
+
+function findBatchQuestion({
+  questions,
+  chapter,
+  section,
+  questionNo,
+}: {
+  questions: Question[];
+  chapter: string;
+  section: string;
+  questionNo: string;
+}): Question | undefined {
+  const normalizedQuestionNo = normalizeQuestionNo(questionNo);
+  return questions.find(
+    (question) =>
+      question.chapter === chapter &&
+      question.section === section &&
+      normalizeQuestionNo(question.questionNo) === normalizedQuestionNo,
+  );
+}
+
+function parseQuestionNumbers(value: string): string[] {
+  const normalized = value
+    .replace(/[，、；;]/g, " ")
+    .replace(/\s*[-~—–至]\s*/g, "-")
+    .trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  const result: string[] = [];
+  for (const token of normalized.split(/\s+/)) {
+    const range = token.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      const direction = start <= end ? 1 : -1;
+      for (let current = start; current !== end + direction; current += direction) {
+        result.push(String(current));
+      }
+      continue;
+    }
+
+    const single = token.match(/\d+/);
+    if (single) {
+      result.push(String(Number(single[0])));
+    }
+  }
+
+  return Array.from(new Set(result));
+}
+
+function normalizeQuestionNo(value: string): string {
+  const match = value.match(/\d+/);
+  return match ? String(Number(match[0])) : value.trim();
 }
 
 function getDefaultReviewAt(): Date {

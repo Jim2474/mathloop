@@ -8,9 +8,11 @@ export default function AppShell({ children }: PropsWithChildren) {
         <div className="apple-nav-glass mx-auto max-w-7xl rounded-[28px]">
           <header className="flex min-h-[4.5rem] flex-col gap-3 px-5 py-3 md:flex-row md:items-center md:justify-between lg:px-7">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/60 bg-white/38 shadow-[0_8px_24px_rgba(29,29,31,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl">
-                <span className="h-3.5 w-3.5 rounded-full border-[3px] border-moss/80" />
-              </div>
+              <img
+                src="/logo.svg"
+                alt="MathLoop logo"
+                className="h-9 w-9 rounded-[12px] border border-white/60 bg-white/50 object-cover shadow-[0_8px_24px_rgba(29,29,31,0.08),inset_0_1px_0_rgba(255,255,255,0.72)]"
+              />
               <div>
                 <h1 className="text-[1.05rem] font-semibold leading-tight tracking-[-0.28px] text-ink">
                   MathLoop

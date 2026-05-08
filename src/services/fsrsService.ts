@@ -27,7 +27,7 @@ const ratingMap: Record<ReviewRating, Grade> = {
 
 export const defaultReviewSettings: ReviewSettings = {
   maxDailyReviews: 10,
-  maxNewPerDay: 3,
+  maxNewPerDay: 10,
   desiredRetention: 0.9,
 };
 

@@ -7,23 +7,29 @@ import MistakeEntryPage from "../pages/MistakeEntryPage";
 import QuestionDetailPage from "../pages/QuestionDetailPage";
 import QuestionListPage from "../pages/QuestionListPage";
 import ReviewPage from "../pages/ReviewPage";
+import { initializeDesktopRuntime } from "../services/desktopBridge";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 
 export default function App() {
   const loadQuestions = useQuestionStore((state) => state.loadQuestions);
   const questions = useQuestionStore((state) => state.questions);
+  const hasHydrated = useReviewStore((state) => state.hasHydrated);
   const syncQuestionLibrary = useReviewStore((state) => state.syncQuestionLibrary);
 
   useEffect(() => {
-    void loadQuestions();
+    async function boot() {
+      await initializeDesktopRuntime();
+      await loadQuestions();
+    }
+    void boot();
   }, [loadQuestions]);
 
   useEffect(() => {
-    if (questions.length > 0) {
+    if (hasHydrated && questions.length > 0) {
       syncQuestionLibrary(questions);
     }
-  }, [questions, syncQuestionLibrary]);
+  }, [hasHydrated, questions, syncQuestionLibrary]);
 
   return (
     <AppShell>

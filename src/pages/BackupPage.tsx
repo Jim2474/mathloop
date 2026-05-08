@@ -3,14 +3,15 @@ import EmptyState from "../components/common/EmptyState";
 import {
   createReviewBackup,
   downloadReviewBackup,
+  getReviewStorageLabel,
   hasStoredReviewState,
   readBackupFile,
 } from "../services/backupService";
 import { getLibrarySyncPreview } from "../services/librarySyncService";
+import { useAssetUrl } from "../hooks/useAssetUrl";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { ReviewSettings } from "../types/review";
-import { toPublicAssetUrl } from "../utils/questionImages";
 
 type ImageStatus = "pending" | "ok" | "missing";
 
@@ -97,6 +98,7 @@ export default function BackupPage() {
   ).length;
   const missingImageCount = syncPreview.missingQuestionImageCount + failedImageCount;
   const stored = hasStoredReviewState();
+  const reviewStorageLabel = getReviewStorageLabel();
 
   function handleExport() {
     const backup = createReviewBackup(
@@ -228,18 +230,18 @@ export default function BackupPage() {
           Keep your review state portable.
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-6 text-ink/58">
-          这里维护浏览器本地复习状态，不会修改 OpenClaw 的 questions.json，也不会上传任何数据。
+          这里维护本地复习状态，不会修改 MathLoop 的 questions.json，也不会上传任何数据。
         </p>
         <div className="mt-5 grid gap-3 md:grid-cols-5">
           <Metric label="本地 cards" value={Object.keys(cards).length} />
           <Metric label="错题记录" value={Object.values(mistakeRecords).filter((record) => record.active).length} />
           <Metric label="复习历史" value={reviewLogs.length} />
           <Metric label="orphan cards" value={syncPreview.orphanCardCount} />
-          <Metric label="localStorage" value={stored || storageTouched > 0 ? "已存在" : "为空"} />
+          <Metric label={reviewStorageLabel} value={stored || storageTouched > 0 ? "已存在" : "为空"} />
         </div>
         {!stored && Object.keys(cards).length === 0 ? (
           <div className="apple-soft-card mt-4 rounded-[20px] border-dashed p-4 text-sm text-ink/60">
-            当前 localStorage 为空。题库加载后会自动初始化本地 cards。
+            当前本地复习存储为空。题库加载后会自动初始化本地 cards。
           </div>
         ) : null}
       </section>
@@ -263,7 +265,7 @@ export default function BackupPage() {
             <div>
               <h3 className="text-2xl font-semibold tracking-[-0.28px]">题库同步</h3>
               <p className="mt-2 text-sm leading-6 text-ink/60">
-                只同步 localStorage 中的复习状态和题目指纹，不写回 questions.json。
+                只同步本地复习状态和题目指纹，不写回 questions.json。
               </p>
             </div>
             <button
@@ -329,7 +331,7 @@ export default function BackupPage() {
         <div className="apple-tile rounded-[26px] p-6">
           <h3 className="text-2xl font-semibold tracking-[-0.28px]">重置本地复习状态</h3>
           <p className="mt-2 text-sm leading-6 text-ink/65">
-            清空 localStorage 中的 openclaw-review-state，然后根据当前题库重新初始化 cards。
+            清空本地复习状态，然后根据当前题库重新初始化 cards。
           </p>
           <button
             type="button"
@@ -344,13 +346,17 @@ export default function BackupPage() {
       <section className="apple-tile rounded-[26px] p-6">
         <h3 className="text-2xl font-semibold tracking-[-0.28px]">复习设置</h3>
         <form onSubmit={handleSettingsSubmit} className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-          <NumberField
+          <SelectField
             label="每日最多复习"
             value={settingsDraft.maxDailyReviews}
-            min={1}
-            max={100}
-            step={1}
-            onChange={(value) => setSettingsDraft((current) => ({ ...current, maxDailyReviews: value }))}
+            options={getDailyReviewOptions(settingsDraft.maxDailyReviews)}
+            onChange={(value) =>
+              setSettingsDraft((current) => ({
+                ...current,
+                maxDailyReviews: value,
+                maxNewPerDay: Math.max(current.maxNewPerDay, value),
+              }))
+            }
           />
           <NumberField
             label="每日最多新题"
@@ -502,6 +508,35 @@ function NumberField({
   );
 }
 
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  options: number[];
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="font-medium text-ink/70">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option} 题
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function HealthImagePreview({
   questionId,
   path,
@@ -513,12 +548,33 @@ function HealthImagePreview({
   status?: ImageStatus;
   onStatus: (questionId: string, status: ImageStatus) => void;
 }) {
-  const url = toPublicAssetUrl(path);
+  const image = useAssetUrl(path);
 
-  if (!url) {
+  useEffect(() => {
+    if (!path.trim()) {
+      onStatus(questionId, "missing");
+      return;
+    }
+    if (image.status === "loaded") {
+      onStatus(questionId, "ok");
+    }
+    if (image.status === "error") {
+      onStatus(questionId, "missing");
+    }
+  }, [image.status, onStatus, path, questionId]);
+
+  if (!path.trim()) {
     return (
       <div className="flex h-20 items-center justify-center rounded-[16px] border border-dashed border-white/50 bg-white/30 text-xs text-ink/45">
         无路径
+      </div>
+    );
+  }
+
+  if (image.status === "loading" || image.status === "idle" || !image.url) {
+    return (
+      <div className="flex h-20 items-center justify-center rounded-[16px] border border-white/50 bg-white/30 text-xs text-ink/45">
+        加载中
       </div>
     );
   }
@@ -533,7 +589,7 @@ function HealthImagePreview({
 
   return (
     <img
-      src={url}
+      src={image.url}
       alt={path}
       loading="lazy"
       onLoad={() => onStatus(questionId, "ok")}
@@ -573,4 +629,10 @@ function formatLocalDateTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function getDailyReviewOptions(currentValue: number): number[] {
+  return Array.from(new Set([5, 10, 15, 20, 30, currentValue]))
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .sort((left, right) => left - right);
 }

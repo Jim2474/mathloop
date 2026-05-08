@@ -8,6 +8,7 @@ import type {
   ReviewSyncResult,
 } from "../types/review";
 import { defaultReviewSettings } from "./fsrsService";
+import { isTauriRuntime } from "./desktopBridge";
 
 export const REVIEW_BACKUP_VERSION = 1;
 export const REVIEW_STORAGE_KEY = "openclaw-review-state";
@@ -121,7 +122,14 @@ export function normalizeSettings(settings: Partial<ReviewSettings>): ReviewSett
 }
 
 export function hasStoredReviewState(): boolean {
+  if (isTauriRuntime()) {
+    return true;
+  }
   return localStorage.getItem(REVIEW_STORAGE_KEY) !== null;
+}
+
+export function getReviewStorageLabel(): string {
+  return isTauriRuntime() ? "SQLite" : "localStorage";
 }
 
 function formatFileDate(date: Date): string {

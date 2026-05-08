@@ -18,8 +18,16 @@ export function findQuestionsByPageAndNumber({
     return [];
   }
 
+  const printedPageMatches = questions.filter(
+    (question) => matchesPrintedPage(question, page) && matchesQuestionNo(question, questionNo),
+  );
+
+  if (printedPageMatches.length > 0) {
+    return printedPageMatches;
+  }
+
   return questions.filter(
-    (question) => matchesPage(question, page) && matchesQuestionNo(question, questionNo),
+    (question) => matchesAnyPage(question, page) && matchesQuestionNo(question, questionNo),
   );
 }
 
@@ -27,7 +35,21 @@ export function getQuestionLookupLabel(question: Question): string {
   return `${question.pageRangeText || `源页 ${question.pageStart}`} / ${question.section} / ${question.questionNo}`;
 }
 
-function matchesPage(question: Question, input: string): boolean {
+function matchesPrintedPage(question: Question, input: string): boolean {
+  const numeric = Number(input);
+
+  if (Number.isFinite(numeric)) {
+    return extractNumber(question.printedPageNumber) === Math.trunc(numeric);
+  }
+
+  const normalizedInput = normalizeLoose(input);
+  const printedValues = [question.printedPageNumber, question.pageRangeText].map((value) =>
+    normalizeLoose(value),
+  );
+  return printedValues.some((value) => value === normalizedInput || value.includes(normalizedInput));
+}
+
+function matchesAnyPage(question: Question, input: string): boolean {
   const numeric = Number(input);
 
   if (Number.isFinite(numeric)) {

@@ -1,0 +1,28 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="220" fill="white"/>
+  <g filter="url(#softShadow)">
+    <path d="M214 494C224 306 379 156 568 156C686 156 791 213 856 301" stroke="url(#topArc)" stroke-width="118" stroke-linecap="round"/>
+    <path d="M818 494C808 682 653 832 464 832C346 832 241 775 176 687" stroke="url(#bottomArc)" stroke-width="118" stroke-linecap="round"/>
+    <path d="M436 464H588" stroke="url(#equals)" stroke-width="40" stroke-linecap="round"/>
+    <path d="M436 560H588" stroke="url(#equals)" stroke-width="40" stroke-linecap="round"/>
+  </g>
+  <defs>
+    <linearGradient id="topArc" x1="209" y1="436" x2="873" y2="287" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DCEBFF"/>
+      <stop offset="0.48" stop-color="#7CB8FF"/>
+      <stop offset="1" stop-color="#087EFF"/>
+    </linearGradient>
+    <linearGradient id="bottomArc" x1="176" y1="685" x2="818" y2="533" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A7CFF"/>
+      <stop offset="0.52" stop-color="#9CCAFF"/>
+      <stop offset="1" stop-color="#DFF1FF"/>
+    </linearGradient>
+    <linearGradient id="equals" x1="416" y1="512" x2="608" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8CEFF"/>
+      <stop offset="1" stop-color="#D8E9FF"/>
+    </linearGradient>
+    <filter id="softShadow" x="57" y="71" width="854" height="846" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#0A7CFF" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+</svg>

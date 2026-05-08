@@ -5,11 +5,13 @@ Smart review for math mistakes. MathLoop is a fully local React app for managing
 ## Current Status
 
 - App name: MathLoop
-- Runtime: Vite + React + TypeScript
+- Brand logo: `public/logo.svg`, mirrored into the browser favicon and Tauri Windows icons
+- Runtime: Vite + React + TypeScript, with a Tauri desktop shell scaffold
 - Review engine: `ts-fsrs`
 - Data source: `public/data/questions.json`
 - Static assets: `public/questions/` and `public/answers/`
-- Local review state: browser `localStorage`, key `openclaw-review-state`
+- Web review state: browser `localStorage`, key `openclaw-review-state`
+- Desktop review state: SQLite at `%APPDATA%\MathLoop\mathloop.db`
 - Backend: none
 - Login/cloud sync: none
 
@@ -57,9 +59,13 @@ Chapter coverage:
 
 ```text
 public/
+  logo.svg                   # primary MathLoop brand mark
+  apple-touch-icon.png       # browser/mobile icon generated from the brand mark
   data/questions.json        # OpenClaw question-bank source of truth
   questions/                 # question images referenced by questionImage/questionImages
   answers/                   # answer images referenced by answerImage/answerImages
+  pages/                     # full-page scan images used by "查看整页"
+  question-fixes/            # verified single-question image fixes
 src/
   app/                       # app bootstrap and question loading
   components/                # layout, dashboard, common, question image components
@@ -68,6 +74,9 @@ src/
   store/                     # Zustand question and review stores
   types/                     # real OpenClaw Question shape and review state types
   utils/                     # date, image path, stats, filters
+src-tauri/
+  icons/                     # Windows app icons generated from the MathLoop brand mark
+  src/main.rs                # Windows desktop shell, SQLite storage, external data bootstrap
 ```
 
 ## Data Model Rules
@@ -169,6 +178,41 @@ Preview the production build:
 npm run preview
 ```
 
+Run the Tauri desktop app in development:
+
+```bash
+npm run tauri:dev
+```
+
+Build the Windows desktop app:
+
+```bash
+npm run tauri:build
+```
+
+Tauri builds require Rust, Cargo, and Microsoft C++ Build Tools with Windows SDK. Current web development still works with `npm run dev`.
+
+## Desktop Data Safety
+
+The desktop app uses an external user data directory instead of storing personal data inside the app bundle:
+
+```text
+%APPDATA%\MathLoop\
+  mathloop.db
+  data\questions.json
+  questions\
+  answers\
+  pages\
+  question-fixes\
+  backups\
+```
+
+On desktop startup, MathLoop creates this directory, initializes SQLite, copies missing bundled question assets without overwriting existing files, and writes an automatic backup when existing review state is found. Automatic startup backups are written to `backups\mathloop-auto-YYYY-MM-DD-HH-mm-ss.json`; MathLoop keeps the latest 30 auto backups and does not prune manual `.db` or restore-safety backups.
+
+The checked-in app bundle and generated installers are not the source of truth for personal study data. Do not delete `%APPDATA%\MathLoop\mathloop.db` or `%APPDATA%\MathLoop\backups\` when cleaning old installers.
+
+To migrate current web data, export a JSON backup from `/backup`, then import it in the desktop app.
+
 ## Design Direction
 
 The UI uses a restrained Apple-inspired glass style:
@@ -180,6 +224,8 @@ The UI uses a restrained Apple-inspired glass style:
 - restrained blue accent
 - large but quiet typography
 - compact capsule buttons
+
+The MathLoop logo is a blue gradient loop with an equals sign, used consistently for the web brand mark, favicon, Apple touch icon, and Tauri Windows icons.
 
 The design target is calm, local, focused, and trustworthy rather than decorative.
 

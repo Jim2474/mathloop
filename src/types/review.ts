@@ -53,6 +53,13 @@ export type ReviewMistakeRecord = {
   active: boolean;
 };
 
+export type ReplaceMistakeQuestionInput = {
+  fromQuestionId: string;
+  toQuestionId: string;
+  sourcePage: string;
+  sourceQuestionNo: string;
+};
+
 export type ReviewQuestionFingerprint = {
   id: string;
   chapter: string;

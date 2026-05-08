@@ -54,7 +54,7 @@ export const useQuestionStore = create<QuestionState>()(
       resetFilters: () => set(initialFilters),
     }),
     {
-      name: "openclaw-question-ui",
+      name: "mathloop-question-ui-v2",
       partialize: (state) => ({
         selectedChapter: state.selectedChapter,
         selectedSection: state.selectedSection,
