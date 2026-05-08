@@ -1,6 +1,6 @@
 [package]
 name = "mathloop"
-version = "0.1.0"
+version = "0.1.1"
 description = "MathLoop desktop app"
 authors = ["MathLoop"]
 edition = "2021"
