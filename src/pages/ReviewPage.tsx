@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
-import { buildTodayReviewQueue } from "../services/reviewQueue";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
-import type { ReviewLog, ReviewQueueItem, ReviewRating } from "../types/review";
+import type { DailyReviewSession, ReviewLog, ReviewQueueItem, ReviewRating } from "../types/review";
 import { formatDateTime, parseDate } from "../utils/date";
 import {
   getAnswerImagePaths,
@@ -23,14 +22,17 @@ export default function ReviewPage() {
     reviewLogs,
     mistakeRecords,
     settings,
+    dailyReviewSession,
+    getOrCreateDailyReviewSession,
+    startNextReviewRound,
+    markDailyReviewSessionCompleted,
     rateQuestion,
     updateSettings,
   } = useReviewStore();
-  const [queue, setQueue] = useState<ReviewQueueItem[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [sessionLogs, setSessionLogs] = useState<ReviewLog[]>([]);
   const [isBrowsingCompletedQueue, setIsBrowsingCompletedQueue] = useState(false);
+
   const upcomingMistakes = Object.values(mistakeRecords ?? {})
     .filter((record) => record.active)
     .map((record) => {
@@ -43,19 +45,22 @@ export default function ReviewPage() {
     .sort((left, right) => (left.due?.getTime() ?? 0) - (right.due?.getTime() ?? 0));
 
   useEffect(() => {
-    if (!isLoading && !error && questions.length > 0 && queue === null) {
-      setQueue(buildTodayReviewQueue({ questions, cards, reviewLogs, mistakeRecords, settings }));
+    if (!isLoading && !error && questions.length > 0) {
+      getOrCreateDailyReviewSession(questions);
     }
-  }, [cards, error, isLoading, mistakeRecords, questions, queue, reviewLogs, settings]);
+  }, [error, getOrCreateDailyReviewSession, isLoading, questions]);
 
-  const activeQueue = queue ?? [];
-  const currentItem = activeQueue[currentIndex];
-  const sessionLogByQuestionId = new Map(sessionLogs.map((log) => [log.questionId, log]));
+  const activeQueue = dailyReviewSession?.queue ?? [];
+  const completedLogByQuestionId = useMemo(
+    () => getSessionLogMap(dailyReviewSession, reviewLogs),
+    [dailyReviewSession, reviewLogs],
+  );
   const completedCount = activeQueue.filter((item) =>
-    sessionLogByQuestionId.has(item.questionId),
+    completedLogByQuestionId.has(item.questionId),
   ).length;
   const isRoundComplete = activeQueue.length > 0 && completedCount === activeQueue.length;
-  const currentLog = currentItem ? sessionLogByQuestionId.get(currentItem.questionId) : undefined;
+  const currentItem = activeQueue[currentIndex];
+  const currentLog = currentItem ? completedLogByQuestionId.get(currentItem.questionId) : undefined;
   const currentQuestion = currentItem
     ? questions.find((question) => question.id === currentItem.questionId)
     : null;
@@ -64,36 +69,41 @@ export default function ReviewPage() {
   const fullPageImagePath = currentQuestion ? getQuestionPageImagePath(currentQuestion) : "";
   const dailyReviewOptions = getDailyReviewOptions(settings.maxDailyReviews);
   const isComplete =
-    queue !== null &&
+    dailyReviewSession !== null &&
     (activeQueue.length === 0 || (isRoundComplete && !isBrowsingCompletedQueue));
 
+  useEffect(() => {
+    if (isRoundComplete) {
+      markDailyReviewSessionCompleted();
+    }
+  }, [isRoundComplete, markDailyReviewSessionCompleted]);
+
   function handleRating(rating: ReviewRating) {
-    if (!currentQuestion) {
+    if (!currentQuestion || !dailyReviewSession) {
       return;
     }
-    if (sessionLogByQuestionId.has(currentQuestion.id)) {
-      goToNextQuestion();
+    if (completedLogByQuestionId.has(currentQuestion.id)) {
+      goToNextUnratedQuestion(completedLogByQuestionId);
       return;
     }
+
     const log = rateQuestion(currentQuestion.id, rating);
-    setSessionLogs((logs) => [...logs, log]);
     setShowAnswer(false);
-    const nextIndex = findNextUnratedIndex(activeQueue, sessionLogByQuestionId, currentIndex);
-    setCurrentIndex(nextIndex ?? activeQueue.length);
+    const optimisticLogs = new Map(completedLogByQuestionId);
+    optimisticLogs.set(log.questionId, log);
+    goToNextUnratedQuestion(optimisticLogs);
   }
 
   function goToQuestion(index: number) {
     const nextIndex = Math.max(0, Math.min(index, activeQueue.length - 1));
     const nextItem = activeQueue[nextIndex];
     setCurrentIndex(nextIndex);
-    setShowAnswer(Boolean(nextItem && sessionLogByQuestionId.has(nextItem.questionId)));
+    setShowAnswer(Boolean(nextItem && completedLogByQuestionId.has(nextItem.questionId)));
   }
 
-  function goToNextQuestion() {
-    if (activeQueue.length === 0) {
-      return;
-    }
-    goToQuestion(currentIndex + 1);
+  function goToNextUnratedQuestion(completed: Map<string, ReviewLog>) {
+    const nextIndex = findNextUnratedIndex(activeQueue, completed, currentIndex);
+    setCurrentIndex(nextIndex ?? activeQueue.length);
   }
 
   function handleBrowseCompletedQueue() {
@@ -112,18 +122,9 @@ export default function ReviewPage() {
   }
 
   function handleContinueNextRound() {
-    const mergedReviewLogs = mergeReviewLogs(reviewLogs, sessionLogs);
-    const nextQueue = buildTodayReviewQueue({
-      questions,
-      cards,
-      reviewLogs: mergedReviewLogs,
-      mistakeRecords,
-      settings,
-    });
-    setQueue(nextQueue);
+    startNextReviewRound(questions);
     setCurrentIndex(0);
     setShowAnswer(false);
-    setSessionLogs([]);
     setIsBrowsingCompletedQueue(false);
   }
 
@@ -133,20 +134,9 @@ export default function ReviewPage() {
       maxDailyReviews: nextLimit,
       maxNewPerDay: nextLimit,
     });
-    setQueue(buildTodayReviewQueue({
-      questions,
-      cards,
-      reviewLogs,
-      mistakeRecords,
-      settings: {
-        ...settings,
-        maxDailyReviews: nextLimit,
-        maxNewPerDay: nextLimit,
-      },
-    }));
+    startNextReviewRound(questions);
     setCurrentIndex(0);
     setShowAnswer(false);
-    setSessionLogs([]);
     setIsBrowsingCompletedQueue(false);
   }
 
@@ -162,7 +152,7 @@ export default function ReviewPage() {
     return <EmptyState title="暂无题目" description="请先放入 OpenClaw 导出的 questions.json。" />;
   }
 
-  if (queue === null) {
+  if (dailyReviewSession === null) {
     return <EmptyState title="正在生成今日队列" description="正在根据本地错题记录整理复习任务。" />;
   }
 
@@ -202,7 +192,7 @@ export default function ReviewPage() {
               <p className="text-xs font-semibold text-ink/50">{rating}</p>
               <p className="mt-1 text-sm text-ink/70">{ratingLabels[rating]}</p>
               <p className="mt-3 text-2xl font-semibold">
-                {sessionLogs.filter((log) => log.rating === rating).length}
+                {Array.from(completedLogByQuestionId.values()).filter((log) => log.rating === rating).length}
               </p>
             </div>
           ))}
@@ -212,7 +202,7 @@ export default function ReviewPage() {
             ? "到了计划时间后，这道题会自动出现在复习页。也可以回到错题录入页把时间改成“现在复习”。"
             : activeQueue.length === 0
             ? "可以在错题录入里按页码和题号添加新的复习任务。"
-            : `本次完成 ${sessionLogs.length} 题。`}
+            : `本次完成 ${completedCount} 题。`}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           {activeQueue.length > 0 ? (
@@ -261,10 +251,10 @@ export default function ReviewPage() {
                   : "到期错题复习"}
             </p>
             <h2 className="mt-3 text-4xl font-semibold tracking-[-0.28px] md:text-5xl">
-              印刷页 {currentQuestion.printedPageNumber || "未标注"} · 第 {currentQuestion.questionNo} 题
+              {currentQuestion.chapter || "未标注章节"}
             </h2>
             <p className="mt-3 text-sm text-ink/58">
-              {currentQuestion.chapter} / {currentQuestion.section}
+              {currentQuestion.section || "未标注题型"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -299,9 +289,7 @@ export default function ReviewPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="text-lg font-semibold">今日题目</h3>
-            <p className="mt-1 text-sm text-ink/56">
-              可以先逐题浏览，再回到任意一题查看答案和评分。
-            </p>
+            <p className="mt-1 text-sm text-ink/56">可以先逐题浏览，再回到任意一题查看答案和评分。</p>
           </div>
           {isBrowsingCompletedQueue ? (
             <button
@@ -316,7 +304,7 @@ export default function ReviewPage() {
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {activeQueue.map((item, index) => {
             const question = questions.find((entry) => entry.id === item.questionId);
-            const done = sessionLogByQuestionId.has(item.questionId);
+            const done = completedLogByQuestionId.has(item.questionId);
             const current = index === currentIndex;
 
             return (
@@ -338,7 +326,10 @@ export default function ReviewPage() {
                   {question?.questionNo ?? item.questionId}
                 </span>
                 <span className="mt-1 block truncate text-xs text-ink/52">
-                  {question?.chapter ?? "该题目已不在当前题库中"}
+                  {question ? getQuestionLocator(question) : "该题目已不在当前题库中"}
+                </span>
+                <span className="mt-1 block truncate text-xs text-ink/52">
+                  {question?.chapter ?? ""}
                 </span>
               </button>
             );
@@ -370,40 +361,18 @@ export default function ReviewPage() {
       <section className="apple-tile rounded-[26px] p-6">
         {!showAnswer ? (
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-xl font-semibold">准备好再看答案</h3>
-              <p className="mt-2 text-sm leading-6 text-ink/56">
-                可以用上方今日题目卡片切换题目，确认后再查看答案并评分。
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => goToQuestion(currentIndex - 1)}
-                disabled={currentIndex === 0}
-                className="apple-ghost-pill w-fit px-5 py-2.5 text-sm font-semibold disabled:opacity-40"
-              >
-                上一题
-              </button>
-              <button
-                type="button"
-                onClick={() => goToQuestion(currentIndex + 1)}
-                disabled={currentIndex >= activeQueue.length - 1}
-                className="apple-ghost-pill w-fit px-5 py-2.5 text-sm font-semibold disabled:opacity-40"
-              >
-                下一题
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAnswer(true)}
-                className="apple-pill w-fit px-5 py-2.5 text-sm font-semibold"
-              >
-                查看答案
-              </button>
-            </div>
+            <TipsPanel tips={currentQuestion.tips} />
+            <button
+              type="button"
+              onClick={() => setShowAnswer(true)}
+              className="apple-pill w-fit px-5 py-2.5 text-sm font-semibold"
+            >
+              查看答案
+            </button>
           </div>
         ) : (
           <div className="space-y-5">
+            <TipsPanel tips={currentQuestion.tips} />
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-xl font-semibold">答案区域</h3>
@@ -453,6 +422,17 @@ export default function ReviewPage() {
   );
 }
 
+function TipsPanel({ tips }: { tips?: string }) {
+  return (
+    <div className="apple-soft-card flex-1 rounded-[20px] p-4">
+      <p className="text-sm font-semibold text-ink">Tips</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink/62">
+        {tips?.trim() || "这道题还没有记录思路。可以在题库详情页补充 tips。"}
+      </p>
+    </div>
+  );
+}
+
 function findNextUnratedIndex(
   queue: ReviewQueueItem[],
   completed: Map<string, ReviewLog>,
@@ -471,16 +451,34 @@ function findNextUnratedIndex(
   return null;
 }
 
-function mergeReviewLogs(reviewLogs: ReviewLog[], sessionLogs: ReviewLog[]): ReviewLog[] {
-  const byId = new Map(reviewLogs.map((log) => [log.id, log]));
-  for (const log of sessionLogs) {
-    byId.set(log.id, log);
+function getSessionLogMap(
+  session: DailyReviewSession | null,
+  reviewLogs: ReviewLog[],
+): Map<string, ReviewLog> {
+  if (!session) {
+    return new Map();
   }
-  return Array.from(byId.values());
+  const sessionStart = parseDate(session.createdAt);
+  const sessionQuestionIds = new Set(session.queue.map((item) => item.questionId));
+  return new Map(
+    reviewLogs
+      .filter((log) => {
+        const reviewedAt = parseDate(log.reviewedAt);
+        return (
+          sessionQuestionIds.has(log.questionId) &&
+          Boolean(sessionStart && reviewedAt && reviewedAt >= sessionStart)
+        );
+      })
+      .map((log) => [log.questionId, log]),
+  );
 }
 
 function getDailyReviewOptions(currentValue: number): number[] {
   return Array.from(new Set([5, 10, 15, 20, 30, currentValue]))
     .filter((value) => Number.isFinite(value) && value > 0)
     .sort((left, right) => left - right);
+}
+
+function getQuestionLocator(question: { printedPageNumber?: string; questionNo: string }): string {
+  return `印刷页 ${question.printedPageNumber || "未标注"} · 第 ${question.questionNo} 题`;
 }

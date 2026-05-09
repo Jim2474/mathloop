@@ -50,10 +50,7 @@ export default function DashboardPage() {
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="总题数" value={stats.total} tone="cool" />
         <StatCard label="错题本" value={reviewStats.mistakeTotal} tone="accent" />
-        <StatCard label="今日到期" value={reviewStats.dueToday} tone="accent" />
         <StatCard label="今日已完成" value={reviewStats.completedToday} tone="cool" />
-        <StatCard label="逾期题" value={reviewStats.overdue} tone="accent" />
-        <StatCard label="未来 7 天待复习" value={reviewStats.futureSevenDays} />
         <StatCard label="已复习题数" value={reviewStats.reviewedTotal} tone="cool" />
       </section>
 
@@ -98,7 +95,6 @@ export default function DashboardPage() {
                   <div className="flex gap-3 text-xs text-ink/65 md:justify-end">
                     <span>总 {item.total}</span>
                     <span>已复习 {item.reviewed}</span>
-                    <span>到期 {item.due}</span>
                   </div>
                 </div>
               ))}

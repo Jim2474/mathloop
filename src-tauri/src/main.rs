@@ -2,6 +2,7 @@ use base64::{engine::general_purpose, Engine as _};
 use chrono::Local;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use serde_json::Value;
 use std::{
     env,
     fs,
@@ -110,6 +111,59 @@ fn load_question_image_fixes_json<R: Runtime>(app: tauri::AppHandle<R>) -> Resul
 }
 
 #[tauri::command]
+fn update_question_tips(question_id: String, tips: String) -> Result<(), String> {
+    let question_id = question_id.trim();
+    if question_id.is_empty() {
+        return Err("题目 ID 不能为空。".to_string());
+    }
+
+    let data_dir = mathloop_data_dir()?;
+    let questions_path = data_dir.join("data").join("questions.json");
+    if !questions_path.exists() {
+        return Err("外部题库 data/questions.json 不存在，无法保存 tips。".to_string());
+    }
+
+    let original = fs::read_to_string(&questions_path).map_err(to_string)?;
+    let mut questions: Value = serde_json::from_str(&original).map_err(to_string)?;
+    let Some(items) = questions.as_array_mut() else {
+        return Err("questions.json 顶层必须是题目数组。".to_string());
+    };
+
+    let Some(question) = items.iter_mut().find(|item| {
+        item.get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id == question_id)
+    }) else {
+        return Err("没有找到要保存 tips 的题目。".to_string());
+    };
+
+    let Some(object) = question.as_object_mut() else {
+        return Err("题目数据格式不正确。".to_string());
+    };
+
+    let backup_dir = data_dir.join("backups");
+    fs::create_dir_all(&backup_dir).map_err(to_string)?;
+    let backup_path = backup_dir.join(format!(
+        "questions-before-tip-{}.json",
+        Local::now().format("%Y-%m-%d-%H-%M-%S")
+    ));
+    fs::write(&backup_path, original).map_err(to_string)?;
+
+    let trimmed = tips.trim();
+    if trimmed.is_empty() {
+        object.remove("tips");
+    } else {
+        object.insert("tips".to_string(), Value::String(trimmed.to_string()));
+    }
+
+    let next = serde_json::to_string_pretty(&questions).map_err(to_string)?;
+    let tmp_path = questions_path.with_extension("json.tmp");
+    fs::write(&tmp_path, next).map_err(to_string)?;
+    fs::rename(&tmp_path, &questions_path).map_err(to_string)?;
+    Ok(())
+}
+
+#[tauri::command]
 fn load_asset_data_url<R: Runtime>(
     app: tauri::AppHandle<R>,
     relative_path: String,
@@ -133,6 +187,7 @@ fn main() {
             review_store_remove,
             load_questions_json,
             load_question_image_fixes_json,
+            update_question_tips,
             load_asset_data_url,
         ])
         .run(tauri::generate_context!())

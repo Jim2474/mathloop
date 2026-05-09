@@ -43,6 +43,14 @@ export type ReviewSettings = {
   desiredRetention: number;
 };
 
+export type DailyReviewSession = {
+  dateKey: string;
+  roundId: string;
+  queue: ReviewQueueItem[];
+  createdAt: string;
+  completedAt?: string;
+};
+
 export type ReviewMistakeRecord = {
   questionId: string;
   markedAt: string;
@@ -94,6 +102,7 @@ export type ReviewBackupData = {
   cards: Record<string, ReviewCardRecord>;
   reviewLogs: ReviewLog[];
   settings: ReviewSettings;
+  dailyReviewSession?: DailyReviewSession | null;
   mistakeRecords?: Record<string, ReviewMistakeRecord>;
   questionFingerprints?: Record<string, ReviewQuestionFingerprint>;
   lastSyncResult?: ReviewSyncResult | null;

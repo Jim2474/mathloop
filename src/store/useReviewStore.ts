@@ -8,6 +8,7 @@ import {
 } from "../services/reviewPersistStorage";
 import type { Question } from "../types/question";
 import type {
+  DailyReviewSession,
   ReviewCardRecord,
   ReviewCleanupResult,
   ReviewLog,
@@ -23,6 +24,7 @@ import {
   defaultReviewSettings,
   rateReviewCard,
 } from "../services/fsrsService";
+import { buildTodayReviewQueue } from "../services/reviewQueue";
 
 type ReviewState = {
   cards: Record<string, ReviewCardRecord>;
@@ -30,12 +32,17 @@ type ReviewState = {
   mistakeRecords: Record<string, ReviewMistakeRecord>;
   questionFingerprints: Record<string, ReviewQuestionFingerprint>;
   lastSyncResult: ReviewSyncResult | null;
+  dailyReviewSession: DailyReviewSession | null;
   settings: ReviewSettings;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
   initializeCards: (questions: Question[]) => void;
   syncQuestionLibrary: (questions: Question[]) => ReviewSyncResult;
   cleanupOrphanReviewData: (questions: Question[]) => ReviewCleanupResult;
+  getOrCreateDailyReviewSession: (questions: Question[], now?: Date) => DailyReviewSession;
+  startNextReviewRound: (questions: Question[], now?: Date) => DailyReviewSession;
+  markDailyReviewSessionCompleted: (completedAt?: Date) => void;
+  clearStaleDailySession: (now?: Date) => void;
   rateQuestion: (questionId: string, rating: ReviewRating, reviewedAt?: Date) => ReviewLog;
   getQuestionLogs: (questionId: string) => ReviewLog[];
   markMistakeQuestion: (input: {
@@ -55,6 +62,7 @@ type ReviewState = {
     mistakeRecords?: Record<string, ReviewMistakeRecord>;
     questionFingerprints?: Record<string, ReviewQuestionFingerprint>;
     lastSyncResult?: ReviewSyncResult | null;
+    dailyReviewSession?: DailyReviewSession | null;
   }) => void;
   resetReviewState: (questions: Question[]) => void;
 };
@@ -67,6 +75,7 @@ export const useReviewStore = create<ReviewState>()(
       mistakeRecords: {},
       questionFingerprints: {},
       lastSyncResult: null,
+      dailyReviewSession: null,
       settings: defaultReviewSettings,
       hasHydrated: false,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
@@ -112,6 +121,48 @@ export const useReviewStore = create<ReviewState>()(
 
         return result;
       },
+      getOrCreateDailyReviewSession: (questions, now = new Date()) => {
+        const state = get();
+        const dateKey = getLocalDateKey(now);
+        if (state.dailyReviewSession?.dateKey === dateKey) {
+          if (state.dailyReviewSession.queue.length === 0) {
+            const refreshedSession = createDailyReviewSession(state, questions, now);
+            if (refreshedSession.queue.length > 0) {
+              set({ dailyReviewSession: refreshedSession });
+              return refreshedSession;
+            }
+          }
+          return state.dailyReviewSession;
+        }
+
+        const session = createDailyReviewSession(state, questions, now);
+        set({ dailyReviewSession: session });
+        return session;
+      },
+      startNextReviewRound: (questions, now = new Date()) => {
+        const session = createDailyReviewSession(get(), questions, now);
+        set({ dailyReviewSession: session });
+        return session;
+      },
+      markDailyReviewSessionCompleted: (completedAt = new Date()) =>
+        set((state) => {
+          if (!state.dailyReviewSession || state.dailyReviewSession.completedAt) {
+            return state;
+          }
+          return {
+            dailyReviewSession: {
+              ...state.dailyReviewSession,
+              completedAt: completedAt.toISOString(),
+            },
+          };
+        }),
+      clearStaleDailySession: (now = new Date()) =>
+        set((state) => {
+          if (!state.dailyReviewSession || state.dailyReviewSession.dateKey === getLocalDateKey(now)) {
+            return state;
+          }
+          return { dailyReviewSession: null };
+        }),
       cleanupOrphanReviewData: (questions) => {
         const validQuestionIds = new Set(questions.map((question) => question.id));
         const state = get();
@@ -306,6 +357,7 @@ export const useReviewStore = create<ReviewState>()(
           mistakeRecords: reviewState.mistakeRecords ?? {},
           questionFingerprints: reviewState.questionFingerprints ?? {},
           lastSyncResult: reviewState.lastSyncResult ?? null,
+          dailyReviewSession: reviewState.dailyReviewSession ?? null,
         }),
       resetReviewState: (questions) => {
         removePersistedReviewState(REVIEW_STORAGE_KEY);
@@ -328,6 +380,7 @@ export const useReviewStore = create<ReviewState>()(
             orphanCards: 0,
             totalCards: questions.length,
           },
+          dailyReviewSession: null,
           settings: defaultReviewSettings,
         });
       },
@@ -344,8 +397,37 @@ export const useReviewStore = create<ReviewState>()(
         mistakeRecords: state.mistakeRecords,
         questionFingerprints: state.questionFingerprints,
         lastSyncResult: state.lastSyncResult,
+        dailyReviewSession: state.dailyReviewSession,
         settings: state.settings,
       }),
     },
   ),
 );
+
+function createDailyReviewSession(
+  state: Pick<ReviewState, "cards" | "reviewLogs" | "mistakeRecords" | "settings">,
+  questions: Question[],
+  now: Date,
+): DailyReviewSession {
+  const dateKey = getLocalDateKey(now);
+  return {
+    dateKey,
+    roundId: `${dateKey}-${Date.now()}`,
+    queue: buildTodayReviewQueue({
+      questions,
+      cards: state.cards,
+      reviewLogs: state.reviewLogs,
+      mistakeRecords: state.mistakeRecords,
+      settings: state.settings,
+      now,
+    }),
+    createdAt: now.toISOString(),
+  };
+}
+
+function getLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}

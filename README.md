@@ -22,6 +22,9 @@ Smart review for math mistakes. MathLoop is a fully local React app for managing
 - Question detail pages that always show the latest static question data.
 - Mistake intake by page number and question number.
 - FSRS review flow for manually marked mistakes.
+- Persistent daily review sessions that do not refresh when navigating away from `/review`.
+- Question-library views for all questions, today's review set, and all reviewed questions.
+- Per-question `tips` notes for recording solution ideas in the desktop external question bank.
 - Answer image display through `answerImage` and `answerImages`.
 - Incremental question-bank sync that preserves local cards and review logs.
 - Backup/export/import for local review state.
@@ -126,6 +129,26 @@ The Backup page includes:
 6. Reveal the answer and rate it with Again, Hard, Good, or Easy.
 
 Only manually marked mistakes enter the review queue.
+
+The review page stores the current day's generated queue in the local review store. Navigating away from `/review` and returning keeps the same round; a new round is generated only when the user chooses to continue to the next round or when a new day begins.
+
+The question library can show the full bank, the current daily review set, or all reviewed questions.
+
+## Tips
+
+Each question can optionally contain a plain-text `tips` field. In the desktop app, the question detail page can save tips back to the external user data file:
+
+```text
+%APPDATA%\MathLoop\data\questions.json
+```
+
+Before writing tips, MathLoop creates a safety copy in:
+
+```text
+%APPDATA%\MathLoop\backups\questions-before-tip-YYYY-MM-DD-HH-mm-ss.json
+```
+
+Browser development mode shows tips but does not write to `public/data/questions.json`.
 
 ## Backup And Health Checks
 

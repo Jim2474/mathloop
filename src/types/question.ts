@@ -10,6 +10,7 @@ export type Question = {
   printedPageNumber: string;
   pageRangeText: string;
   questionText: string;
+  tips?: string;
   questionImage: string;
   questionImages: string[];
   answerImage?: string | null;

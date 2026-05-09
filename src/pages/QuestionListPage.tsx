@@ -1,9 +1,13 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import EmptyState from "../components/common/EmptyState";
 import { useQuestionStore } from "../store/useQuestionStore";
+import { useReviewStore } from "../store/useReviewStore";
 import type { UncertainFilter } from "../types/question";
 import { filterQuestions } from "../utils/questionFilters";
 import { getUniqueValues } from "../utils/questionStats";
+
+type QuestionView = "all" | "today" | "reviewed";
 
 export default function QuestionListPage() {
   const {
@@ -20,6 +24,8 @@ export default function QuestionListPage() {
     setSearchTerm,
     resetFilters,
   } = useQuestionStore();
+  const { cards, reviewLogs, dailyReviewSession } = useReviewStore();
+  const [view, setView] = useState<QuestionView>("all");
 
   const chapters = getUniqueValues(questions, "chapter");
   const sections = getUniqueValues(
@@ -28,8 +34,24 @@ export default function QuestionListPage() {
       : questions.filter((question) => question.chapter === selectedChapter),
     "section",
   );
+  const todayQuestionIds = new Set(dailyReviewSession?.queue.map((item) => item.questionId) ?? []);
+  const reviewedQuestionIds = new Set([
+    ...reviewLogs.map((log) => log.questionId),
+    ...Object.values(cards)
+      .filter((card) => card.card.reps > 0)
+      .map((card) => card.questionId),
+  ]);
+  const scopedQuestions = questions.filter((question) => {
+    if (view === "today") {
+      return todayQuestionIds.has(question.id);
+    }
+    if (view === "reviewed") {
+      return reviewedQuestionIds.has(question.id);
+    }
+    return true;
+  });
   const visibleQuestions = filterQuestions({
-    questions,
+    questions: scopedQuestions,
     selectedChapter,
     selectedSection,
     uncertainFilter,
@@ -54,7 +76,8 @@ export default function QuestionListPage() {
               Browse the source of truth.
             </h2>
             <p className="mt-4 text-sm leading-6 text-ink/58">
-              共 {questions.length} 题，当前显示 {visibleQuestions.length} 题。题目内容始终来自最新 questions.json。
+              共 {questions.length} 题，当前集合 {scopedQuestions.length} 题，显示 {visibleQuestions.length} 题。
+              题目内容始终来自最新 questions.json。
             </p>
           </div>
           <button
@@ -64,6 +87,28 @@ export default function QuestionListPage() {
           >
             重置筛选
           </button>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {[
+            { key: "all", label: "全部题库", count: questions.length },
+            { key: "today", label: "今日复习", count: todayQuestionIds.size },
+            { key: "reviewed", label: "已复习题目", count: reviewedQuestionIds.size },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setView(item.key as QuestionView)}
+              className={[
+                "rounded-full px-4 py-2 text-sm font-semibold transition",
+                view === item.key
+                  ? "bg-slateblue text-white shadow-[0_8px_20px_rgba(0,102,204,0.16)]"
+                  : "bg-white/38 text-ink/62 hover:bg-white/58",
+              ].join(" ")}
+            >
+              {item.label} <span className="ml-1 opacity-70">{item.count}</span>
+            </button>
+          ))}
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -125,16 +170,24 @@ export default function QuestionListPage() {
       </section>
 
       {visibleQuestions.length === 0 ? (
-        <EmptyState title="没有匹配的题目" description="可以调整筛选条件或检查 OpenClaw 导出数据。" />
+        <EmptyState
+          title={view === "today" ? "暂无今日复习题目" : "没有匹配的题目"}
+          description={
+            view === "today"
+              ? "进入复习页后会生成并保存今天的复习题目。"
+              : "可以调整筛选条件或检查 OpenClaw 导出数据。"
+          }
+        />
       ) : (
         <section className="apple-tile overflow-hidden rounded-[26px]">
-          <div className="hidden grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] gap-3 border-b border-white/46 bg-white/34 px-5 py-3 text-xs font-semibold uppercase text-ink/48 lg:grid">
+          <div className="hidden grid-cols-[1fr_1.2fr_1fr_1fr_0.7fr_1fr_0.9fr_0.7fr] gap-3 border-b border-white/46 bg-white/34 px-5 py-3 text-xs font-semibold uppercase text-ink/48 lg:grid">
             <span>ID</span>
             <span>书名</span>
             <span>章节</span>
             <span>小节</span>
             <span>题号</span>
             <span>页码</span>
+            <span>定位</span>
             <span>状态</span>
           </div>
           <div className="divide-y divide-white/42">
@@ -142,7 +195,7 @@ export default function QuestionListPage() {
               <Link
                 key={question.id}
                 to={`/questions/${encodeURIComponent(question.id)}`}
-                className="grid gap-2 px-5 py-4 transition hover:bg-white/42 lg:grid-cols-[1fr_1.3fr_1fr_1fr_0.8fr_1fr_0.7fr] lg:items-center lg:gap-3"
+                className="grid gap-2 px-5 py-4 transition hover:bg-white/42 lg:grid-cols-[1fr_1.2fr_1fr_1fr_0.7fr_1fr_0.9fr_0.7fr] lg:items-center lg:gap-3"
               >
                 <span className="font-mono text-sm font-semibold text-slateblue">{question.id}</span>
                 <span className="text-sm text-ink/75">{question.bookName}</span>
@@ -150,15 +203,26 @@ export default function QuestionListPage() {
                 <span className="text-sm text-ink/75">{question.section}</span>
                 <span className="text-sm font-medium">{question.questionNo}</span>
                 <span className="text-sm text-ink/65">{question.pageRangeText}</span>
+                <span className="text-sm font-medium text-ink/70">{getQuestionLocator(question)}</span>
                 <span
                   className={[
                     "w-fit rounded-full px-3 py-1 text-xs font-semibold",
-                    question.meta.uncertain
+                    reviewedQuestionIds.has(question.id)
+                      ? "bg-slateblue/12 text-slateblue"
+                      : todayQuestionIds.has(question.id)
+                      ? "bg-cinnabar/12 text-cinnabar"
+                      : question.meta.uncertain
                       ? "bg-cinnabar/12 text-cinnabar"
                       : "bg-moss/12 text-moss",
                   ].join(" ")}
                 >
-                  {question.meta.uncertain ? "uncertain" : "confirmed"}
+                  {reviewedQuestionIds.has(question.id)
+                    ? "已复习"
+                    : todayQuestionIds.has(question.id)
+                    ? "今日"
+                    : question.meta.uncertain
+                    ? "uncertain"
+                    : "confirmed"}
                 </span>
               </Link>
             ))}
@@ -167,4 +231,8 @@ export default function QuestionListPage() {
       )}
     </div>
   );
+}
+
+function getQuestionLocator(question: { printedPageNumber?: string; questionNo: string }): string {
+  return `印刷页 ${question.printedPageNumber || "未标注"} · 第 ${question.questionNo} 题`;
 }

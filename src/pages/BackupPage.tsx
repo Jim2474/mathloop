@@ -23,6 +23,7 @@ export default function BackupPage() {
     mistakeRecords,
     questionFingerprints,
     lastSyncResult,
+    dailyReviewSession,
     settings,
     updateSettings,
     importReviewState,
@@ -108,6 +109,7 @@ export default function BackupPage() {
       mistakeRecords,
       questionFingerprints,
       lastSyncResult,
+      dailyReviewSession,
     );
     downloadReviewBackup(backup);
     setMessage("已生成本地复习数据备份。");
@@ -138,6 +140,7 @@ export default function BackupPage() {
         mistakeRecords: backup.mistakeRecords,
         questionFingerprints: backup.questionFingerprints,
         lastSyncResult: backup.lastSyncResult,
+        dailyReviewSession: backup.dailyReviewSession,
       });
       syncQuestionLibrary(questions);
       setStorageTouched((value) => value + 1);

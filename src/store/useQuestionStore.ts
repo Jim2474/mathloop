@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { updateDesktopQuestionTips } from "../services/desktopBridge";
 import { loadOpenClawQuestions } from "../services/questionLoader";
 import type { Question, UncertainFilter } from "../types/question";
 
@@ -15,6 +16,7 @@ type QuestionState = PersistedQuestionState & {
   isLoading: boolean;
   error: string | null;
   loadQuestions: () => Promise<void>;
+  saveQuestionTips: (questionId: string, tips: string) => Promise<void>;
   setSelectedChapter: (chapter: string) => void;
   setSelectedSection: (section: string) => void;
   setUncertainFilter: (filter: UncertainFilter) => void;
@@ -45,6 +47,11 @@ export const useQuestionStore = create<QuestionState>()(
           const message = error instanceof Error ? error.message : "读取题库失败。";
           set({ questions: [], isLoading: false, error: message });
         }
+      },
+      saveQuestionTips: async (questionId, tips) => {
+        await updateDesktopQuestionTips(questionId, tips);
+        const questions = await loadOpenClawQuestions();
+        set({ questions, error: null });
       },
       setSelectedChapter: (selectedChapter) =>
         set({ selectedChapter, selectedSection: "all" }),

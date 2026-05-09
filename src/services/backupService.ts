@@ -1,6 +1,7 @@
 import type {
   ReviewBackupData,
   ReviewCardRecord,
+  DailyReviewSession,
   ReviewLog,
   ReviewMistakeRecord,
   ReviewQuestionFingerprint,
@@ -20,6 +21,7 @@ export function createReviewBackup(
   mistakeRecords: Record<string, ReviewMistakeRecord> = {},
   questionFingerprints: Record<string, ReviewQuestionFingerprint> = {},
   lastSyncResult: ReviewSyncResult | null = null,
+  dailyReviewSession: DailyReviewSession | null = null,
 ): ReviewBackupData {
   return {
     version: REVIEW_BACKUP_VERSION,
@@ -30,6 +32,7 @@ export function createReviewBackup(
     mistakeRecords,
     questionFingerprints,
     lastSyncResult,
+    dailyReviewSession,
   };
 }
 
@@ -99,6 +102,9 @@ export function validateReviewBackup(value: unknown): ReviewBackupData {
       : {},
     lastSyncResult: isRecord(value.lastSyncResult)
       ? (value.lastSyncResult as ReviewSyncResult)
+      : null,
+    dailyReviewSession: isRecord(value.dailyReviewSession)
+      ? (value.dailyReviewSession as DailyReviewSession)
       : null,
   };
 }

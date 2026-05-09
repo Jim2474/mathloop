@@ -45,3 +45,11 @@ export async function loadDesktopAssetDataUrl(path: string): Promise<string> {
   await initializeDesktopRuntime();
   return invokeDesktop<string>("load_asset_data_url", { relativePath: path });
 }
+
+export async function updateDesktopQuestionTips(questionId: string, tips: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    throw new Error("只有桌面版可以把 tips 保存到外部题库。");
+  }
+  await initializeDesktopRuntime();
+  await invokeDesktop<void>("update_question_tips", { questionId, tips });
+}
