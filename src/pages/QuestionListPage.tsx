@@ -4,6 +4,7 @@ import EmptyState from "../components/common/EmptyState";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { UncertainFilter } from "../types/question";
+import { formatDateTime } from "../utils/date";
 import { filterQuestions } from "../utils/questionFilters";
 import { getUniqueValues } from "../utils/questionStats";
 
@@ -41,6 +42,22 @@ export default function QuestionListPage() {
       .filter((card) => card.card.reps > 0)
       .map((card) => card.questionId),
   ]);
+  const latestReviewTimeByQuestionId = new Map<string, string>();
+  for (const log of reviewLogs) {
+    const current = latestReviewTimeByQuestionId.get(log.questionId);
+    if (!current || log.reviewedAt > current) {
+      latestReviewTimeByQuestionId.set(log.questionId, log.reviewedAt);
+    }
+  }
+  for (const card of Object.values(cards)) {
+    if (!card.card.last_review) {
+      continue;
+    }
+    const current = latestReviewTimeByQuestionId.get(card.questionId);
+    if (!current || card.card.last_review > current) {
+      latestReviewTimeByQuestionId.set(card.questionId, card.card.last_review);
+    }
+  }
   const scopedQuestions = questions.filter((question) => {
     if (view === "today") {
       return todayQuestionIds.has(question.id);
@@ -180,7 +197,7 @@ export default function QuestionListPage() {
         />
       ) : (
         <section className="apple-tile overflow-hidden rounded-[26px]">
-          <div className="hidden grid-cols-[1fr_1.2fr_1fr_1fr_0.7fr_1fr_0.9fr_0.7fr] gap-3 border-b border-white/46 bg-white/34 px-5 py-3 text-xs font-semibold uppercase text-ink/48 lg:grid">
+          <div className="hidden grid-cols-[1fr_1.1fr_1fr_1fr_0.6fr_0.9fr_0.8fr_0.9fr_0.7fr] gap-3 border-b border-white/46 bg-white/34 px-5 py-3 text-xs font-semibold uppercase text-ink/48 lg:grid">
             <span>ID</span>
             <span>书名</span>
             <span>章节</span>
@@ -188,6 +205,7 @@ export default function QuestionListPage() {
             <span>题号</span>
             <span>页码</span>
             <span>定位</span>
+            <span>最近复习</span>
             <span>状态</span>
           </div>
           <div className="divide-y divide-white/42">
@@ -195,7 +213,7 @@ export default function QuestionListPage() {
               <Link
                 key={question.id}
                 to={`/questions/${encodeURIComponent(question.id)}`}
-                className="grid gap-2 px-5 py-4 transition hover:bg-white/42 lg:grid-cols-[1fr_1.2fr_1fr_1fr_0.7fr_1fr_0.9fr_0.7fr] lg:items-center lg:gap-3"
+                className="grid gap-2 px-5 py-4 transition hover:bg-white/42 lg:grid-cols-[1fr_1.1fr_1fr_1fr_0.6fr_0.9fr_0.8fr_0.9fr_0.7fr] lg:items-center lg:gap-3"
               >
                 <span className="font-mono text-sm font-semibold text-slateblue">{question.id}</span>
                 <span className="text-sm text-ink/75">{question.bookName}</span>
@@ -204,6 +222,9 @@ export default function QuestionListPage() {
                 <span className="text-sm font-medium">{question.questionNo}</span>
                 <span className="text-sm text-ink/65">{question.pageRangeText}</span>
                 <span className="text-sm font-medium text-ink/70">{getQuestionLocator(question)}</span>
+                <span className="text-sm text-ink/60">
+                  {formatDateTime(latestReviewTimeByQuestionId.get(question.id))}
+                </span>
                 <span
                   className={[
                     "w-fit rounded-full px-3 py-1 text-xs font-semibold",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
+import { isTauriRuntime } from "../services/desktopBridge";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { DailyReviewSession, ReviewLog, ReviewQueueItem, ReviewRating } from "../types/review";
@@ -16,7 +17,7 @@ import { ratingLabels } from "../utils/reviewLabels";
 const ratings: ReviewRating[] = ["Again", "Hard", "Good", "Easy"];
 
 export default function ReviewPage() {
-  const { questions, isLoading, error } = useQuestionStore();
+  const { questions, isLoading, error, saveQuestionTips } = useQuestionStore();
   const {
     cards,
     reviewLogs,
@@ -32,6 +33,9 @@ export default function ReviewPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [isBrowsingCompletedQueue, setIsBrowsingCompletedQueue] = useState(false);
+  const [tipsDraft, setTipsDraft] = useState("");
+  const [tipsMessage, setTipsMessage] = useState("");
+  const [isSavingTips, setIsSavingTips] = useState(false);
 
   const upcomingMistakes = Object.values(mistakeRecords ?? {})
     .filter((record) => record.active)
@@ -77,6 +81,12 @@ export default function ReviewPage() {
       markDailyReviewSessionCompleted();
     }
   }, [isRoundComplete, markDailyReviewSessionCompleted]);
+
+  useEffect(() => {
+    setTipsDraft(currentQuestion?.tips ?? "");
+    setTipsMessage("");
+    setIsSavingTips(false);
+  }, [currentQuestion?.id, currentQuestion?.tips]);
 
   function handleRating(rating: ReviewRating) {
     if (!currentQuestion || !dailyReviewSession) {
@@ -138,6 +148,26 @@ export default function ReviewPage() {
     setCurrentIndex(0);
     setShowAnswer(false);
     setIsBrowsingCompletedQueue(false);
+  }
+
+  async function handleSaveTips() {
+    if (!currentQuestion) {
+      return;
+    }
+    if (!isTauriRuntime()) {
+      setTipsMessage("浏览器开发模式不能直接写入题库；请在 MathLoop 桌面版中保存 tips。");
+      return;
+    }
+    setIsSavingTips(true);
+    setTipsMessage("");
+    try {
+      await saveQuestionTips(currentQuestion.id, tipsDraft);
+      setTipsMessage(tipsDraft.trim() ? "Tips 已保存。" : "Tips 已清空。");
+    } catch (error) {
+      setTipsMessage(error instanceof Error ? error.message : "保存 tips 失败。");
+    } finally {
+      setIsSavingTips(false);
+    }
   }
 
   if (isLoading) {
@@ -361,7 +391,13 @@ export default function ReviewPage() {
       <section className="apple-tile rounded-[26px] p-6">
         {!showAnswer ? (
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <TipsPanel tips={currentQuestion.tips} />
+            <TipsEditor
+              value={tipsDraft}
+              message={tipsMessage}
+              isSaving={isSavingTips}
+              onChange={setTipsDraft}
+              onSave={handleSaveTips}
+            />
             <button
               type="button"
               onClick={() => setShowAnswer(true)}
@@ -372,7 +408,13 @@ export default function ReviewPage() {
           </div>
         ) : (
           <div className="space-y-5">
-            <TipsPanel tips={currentQuestion.tips} />
+            <TipsEditor
+              value={tipsDraft}
+              message={tipsMessage}
+              isSaving={isSavingTips}
+              onChange={setTipsDraft}
+              onSave={handleSaveTips}
+            />
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-xl font-semibold">答案区域</h3>
@@ -422,12 +464,43 @@ export default function ReviewPage() {
   );
 }
 
-function TipsPanel({ tips }: { tips?: string }) {
+function TipsEditor({
+  value,
+  message,
+  isSaving,
+  onChange,
+  onSave,
+}: {
+  value: string;
+  message: string;
+  isSaving: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+}) {
   return (
     <div className="apple-soft-card flex-1 rounded-[20px] p-4">
-      <p className="text-sm font-semibold text-ink">Tips</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink/62">
-        {tips?.trim() || "这道题还没有记录思路。可以在题库详情页补充 tips。"}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-ink">Tips</p>
+          <p className="mt-1 text-xs text-ink/48">复习时随手写思路，下次查看答案前会先看到。</p>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={isSaving}
+          className="apple-ghost-pill w-fit px-4 py-2 text-xs font-semibold disabled:opacity-45"
+        >
+          {isSaving ? "保存中" : "保存 Tips"}
+        </button>
+      </div>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="例如：先看定义域；换元后注意上下限；这题关键是构造辅助函数。"
+        className="apple-control mt-3 min-h-24 w-full resize-y rounded-[18px] px-4 py-3 text-sm leading-6"
+      />
+      <p className="mt-2 text-xs text-ink/46">
+        {message || "桌面版保存前会自动备份外部 questions.json。"}
       </p>
     </div>
   );

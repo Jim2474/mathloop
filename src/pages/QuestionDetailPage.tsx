@@ -1,8 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
-import { isTauriRuntime } from "../services/desktopBridge";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import { getAnswerImagePaths, getQuestionImagePaths } from "../utils/questionImages";
@@ -12,17 +10,9 @@ import { stateLabel } from "../utils/reviewLabels";
 
 export default function QuestionDetailPage() {
   const { id } = useParams();
-  const { questions, isLoading, error, saveQuestionTips } = useQuestionStore();
+  const { questions, isLoading, error } = useQuestionStore();
   const { cards, getQuestionLogs, mistakeRecords } = useReviewStore();
   const question = questions.find((item) => item.id === id);
-  const [tipsInput, setTipsInput] = useState("");
-  const [tipsMessage, setTipsMessage] = useState("");
-  const [isSavingTips, setIsSavingTips] = useState(false);
-
-  useEffect(() => {
-    setTipsInput(question?.tips ?? "");
-    setTipsMessage("");
-  }, [question?.id, question?.tips]);
 
   if (isLoading) {
     return <EmptyState title="正在读取题目" description="正在加载 /data/questions.json。" />;
@@ -49,25 +39,6 @@ export default function QuestionDetailPage() {
   const reviewCard = cards[question.id];
   const questionLogs = getQuestionLogs(question.id);
   const mistakeRecord = mistakeRecords[question.id];
-  const canSaveTips = isTauriRuntime();
-  const questionId = question.id;
-
-  async function handleSaveTips() {
-    if (!canSaveTips) {
-      setTipsMessage("浏览器开发模式不能直接写入题库；请在 MathLoop 桌面版中保存 tips。");
-      return;
-    }
-    setIsSavingTips(true);
-    setTipsMessage("");
-    try {
-      await saveQuestionTips(questionId, tipsInput);
-      setTipsMessage(tipsInput.trim() ? "Tips 已保存到外部题库。" : "Tips 已清空。");
-    } catch (error) {
-      setTipsMessage(error instanceof Error ? error.message : "保存 tips 失败。");
-    } finally {
-      setIsSavingTips(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -132,38 +103,10 @@ export default function QuestionDetailPage() {
       </section>
 
       <section className="apple-tile rounded-[26px] p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h3 className="text-2xl font-semibold tracking-[-0.28px]">Tips</h3>
-            <p className="mt-2 text-sm leading-6 text-ink/56">
-              写下这道题的思路、坑点或下次复习时想先看的提醒。桌面版会保存到外部题库。
-            </p>
-          </div>
-          {!canSaveTips ? (
-            <span className="apple-soft-card w-fit rounded-full px-4 py-2 text-xs font-semibold text-ink/58">
-              桌面版可保存
-            </span>
-          ) : null}
-        </div>
-        <textarea
-          value={tipsInput}
-          onChange={(event) => setTipsInput(event.target.value)}
-          placeholder="例如：先看定义域；换元后注意上下限；这题关键是构造辅助函数。"
-          className="apple-control mt-5 min-h-32 w-full resize-y rounded-[22px] px-4 py-3 text-sm leading-6"
-        />
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink/56">
-            {tipsMessage || (canSaveTips ? "保存前会自动备份当前 questions.json。" : "当前浏览器模式不会写入题库文件。")}
-          </p>
-          <button
-            type="button"
-            onClick={handleSaveTips}
-            disabled={isSavingTips}
-            className="apple-pill w-fit px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
-          >
-            {isSavingTips ? "保存中" : "保存 Tips"}
-          </button>
-        </div>
+        <h3 className="text-2xl font-semibold tracking-[-0.28px]">Tips</h3>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink/62">
+          {question.tips?.trim() || "这道题还没有记录思路。复习时可以在查看答案区域随手写下 tips。"}
+        </p>
       </section>
 
       <section className="apple-tile rounded-[26px] p-6">
