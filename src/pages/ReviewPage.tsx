@@ -155,16 +155,16 @@ export default function ReviewPage() {
       return;
     }
     if (!isTauriRuntime()) {
-      setTipsMessage("浏览器开发模式不能直接写入题库；请在 MathLoop 桌面版中保存 tips。");
+      setTipsMessage("浏览器开发模式不能直接写入题库；请在 MathLoop 桌面版中保存解题思路。");
       return;
     }
     setIsSavingTips(true);
     setTipsMessage("");
     try {
       await saveQuestionTips(currentQuestion.id, tipsDraft);
-      setTipsMessage(tipsDraft.trim() ? "Tips 已保存。" : "Tips 已清空。");
+      setTipsMessage(tipsDraft.trim() ? "解题思路已保存。" : "解题思路已清空。");
     } catch (error) {
-      setTipsMessage(error instanceof Error ? error.message : "保存 tips 失败。");
+      setTipsMessage(error instanceof Error ? error.message : "保存解题思路失败。");
     } finally {
       setIsSavingTips(false);
     }
@@ -395,6 +395,7 @@ export default function ReviewPage() {
               value={tipsDraft}
               message={tipsMessage}
               isSaving={isSavingTips}
+              mode="draft"
               onChange={setTipsDraft}
               onSave={handleSaveTips}
             />
@@ -412,6 +413,7 @@ export default function ReviewPage() {
               value={tipsDraft}
               message={tipsMessage}
               isSaving={isSavingTips}
+              mode="answer"
               onChange={setTipsDraft}
               onSave={handleSaveTips}
             />
@@ -468,12 +470,14 @@ function TipsEditor({
   value,
   message,
   isSaving,
+  mode,
   onChange,
   onSave,
 }: {
   value: string;
   message: string;
   isSaving: boolean;
+  mode: "draft" | "answer";
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
@@ -481,8 +485,12 @@ function TipsEditor({
     <div className="apple-soft-card flex-1 rounded-[20px] p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm font-semibold text-ink">Tips</p>
-          <p className="mt-1 text-xs text-ink/48">复习时随手写思路，下次查看答案前会先看到。</p>
+          <p className="text-sm font-semibold text-ink">解题思路</p>
+          <p className="mt-1 text-xs text-ink/48">
+            {mode === "answer"
+              ? "先看自己的突破口，再核对答案和评分。"
+              : "记录突破口、易错点或下次复习前想先看的提醒。"}
+          </p>
         </div>
         <button
           type="button"
@@ -490,13 +498,13 @@ function TipsEditor({
           disabled={isSaving}
           className="apple-ghost-pill w-fit px-4 py-2 text-xs font-semibold disabled:opacity-45"
         >
-          {isSaving ? "保存中" : "保存 Tips"}
+          {isSaving ? "保存中" : "保存思路"}
         </button>
       </div>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="例如：先看定义域；换元后注意上下限；这题关键是构造辅助函数。"
+        placeholder="例如：先看定义域；换元后注意上下限；关键是构造辅助函数。"
         className="apple-control mt-3 min-h-24 w-full resize-y rounded-[18px] px-4 py-3 text-sm leading-6"
       />
       <p className="mt-2 text-xs text-ink/46">

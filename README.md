@@ -134,21 +134,23 @@ The review page stores the current day's generated queue in the local review sto
 
 The question library can show the full bank, the current daily review set, or all reviewed questions.
 
-## Tips
+## 解题思路
 
-Each question can optionally contain a plain-text `tips` field. In the desktop app, the question detail page can save tips back to the external user data file:
+Each question can optionally contain a plain-text `tips` field. The UI calls this field `解题思路` because it is meant for solution ideas, mistake notes, and the first hint the user wants to see during review.
+
+In the desktop app, the review page can save 解题思路 back to the external user data file:
 
 ```text
 %APPDATA%\MathLoop\data\questions.json
 ```
 
-Before writing tips, MathLoop creates a safety copy in:
+Before writing the field, MathLoop creates a safety copy in:
 
 ```text
 %APPDATA%\MathLoop\backups\questions-before-tip-YYYY-MM-DD-HH-mm-ss.json
 ```
 
-Browser development mode shows tips but does not write to `public/data/questions.json`.
+Browser development mode shows 解题思路 but does not write to `public/data/questions.json`. The question detail page displays existing 解题思路 as read-only context.
 
 ## Backup And Health Checks
 
