@@ -6,7 +6,8 @@ import re
 # Add book directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary
+from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary, crop_question_image, crop_answer_image
+from PIL import Image
 
 
 def test_load_pdf():
@@ -90,4 +91,31 @@ def test_detect_answers_chapter1():
     for i in range(1, len(answers)):
         assert answers[i].question_no > answers[i - 1].question_no
 
+    doc.close()
+
+
+def test_crop_question_image():
+    """Test question image cropping."""
+    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    doc = load_pdf(pdf_path)
+
+    # Get first question boundary
+    questions = detect_questions(doc, chapter_num=1)
+    q = questions[0]
+
+    # Crop image
+    output_path = "test_question_crop.png"
+    crop_question_image(doc, q, output_path)
+
+    # Verify image was created
+    assert os.path.exists(output_path)
+
+    # Verify image dimensions
+    img = Image.open(output_path)
+    assert img.width > 0
+    assert img.height > 0
+    img.close()
+
+    # Cleanup
+    os.remove(output_path)
     doc.close()

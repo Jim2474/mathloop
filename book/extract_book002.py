@@ -8,9 +8,11 @@ import fitz  # PyMuPDF
 import re
 import json
 import os
+import io
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+from PIL import Image
 
 
 # Chapter configuration
@@ -262,3 +264,119 @@ def detect_answers(doc: fitz.Document, chapter_num: int) -> List[AnswerBoundary]
             answers[i].y_end = 800
 
     return answers
+
+
+def render_page_image(doc: fitz.Document, page_num: int, dpi: int = 200) -> Image.Image:
+    """Render a PDF page as an image."""
+    page = doc[page_num - 1]  # Convert to 0-indexed
+    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    pix = page.get_pixmap(matrix=mat)
+
+    # Convert to PIL Image
+    img_data = pix.tobytes("png")
+    img = Image.open(io.BytesIO(img_data))
+    return img
+
+
+def crop_question_image(
+    doc: fitz.Document,
+    question: QuestionBoundary,
+    output_path: str,
+    dpi: int = 200,
+    padding: int = 10
+) -> None:
+    """Crop question image from PDF pages."""
+    # Calculate pixel coordinates
+    scale = dpi / 72
+
+    if question.page_start == question.page_end:
+        # Single page question
+        img = render_page_image(doc, question.page_start, dpi)
+        y1 = max(0, int(question.y_start * scale) - padding)
+        y2 = min(img.height, int(question.y_end * scale) + padding)
+        cropped = img.crop((0, y1, img.width, y2))
+        cropped.save(output_path)
+    else:
+        # Multi-page question: crop from each page and concatenate
+        images = []
+
+        # First page: from y_start to bottom
+        img1 = render_page_image(doc, question.page_start, dpi)
+        y1 = max(0, int(question.y_start * scale) - padding)
+        cropped1 = img1.crop((0, y1, img1.width, img1.height))
+        images.append(cropped1)
+
+        # Middle pages: full pages
+        for pg in range(question.page_start + 1, question.page_end):
+            img_mid = render_page_image(doc, pg, dpi)
+            images.append(img_mid)
+
+        # Last page: from top to y_end
+        img_last = render_page_image(doc, question.page_end, dpi)
+        y2 = min(img_last.height, int(question.y_end * scale) + padding)
+        cropped_last = img_last.crop((0, 0, img_last.width, y2))
+        images.append(cropped_last)
+
+        # Concatenate images vertically
+        total_height = sum(img.height for img in images)
+        max_width = max(img.width for img in images)
+        combined = Image.new("RGB", (max_width, total_height), "white")
+
+        y_offset = 0
+        for img in images:
+            combined.paste(img, (0, y_offset))
+            y_offset += img.height
+
+        combined.save(output_path)
+
+
+def crop_answer_image(
+    doc: fitz.Document,
+    answer: AnswerBoundary,
+    output_path: str,
+    dpi: int = 200,
+    padding: int = 10
+) -> None:
+    """Crop answer image from PDF pages."""
+    # Same logic as question cropping
+    scale = dpi / 72
+
+    if answer.page_start == answer.page_end:
+        # Single page answer
+        img = render_page_image(doc, answer.page_start, dpi)
+        y1 = max(0, int(answer.y_start * scale) - padding)
+        y2 = min(img.height, int(answer.y_end * scale) + padding)
+        cropped = img.crop((0, y1, img.width, y2))
+        cropped.save(output_path)
+    else:
+        # Multi-page answer
+        images = []
+
+        # First page
+        img1 = render_page_image(doc, answer.page_start, dpi)
+        y1 = max(0, int(answer.y_start * scale) - padding)
+        cropped1 = img1.crop((0, y1, img1.width, img1.height))
+        images.append(cropped1)
+
+        # Middle pages
+        for pg in range(answer.page_start + 1, answer.page_end):
+            img_mid = render_page_image(doc, pg, dpi)
+            images.append(img_mid)
+
+        # Last page
+        img_last = render_page_image(doc, answer.page_end, dpi)
+        y2 = min(img_last.height, int(answer.y_end * scale) + padding)
+        cropped_last = img_last.crop((0, 0, img_last.width, y2))
+        images.append(cropped_last)
+
+        # Concatenate
+        total_height = sum(img.height for img in images)
+        max_width = max(img.width for img in images)
+        combined = Image.new("RGB", (max_width, total_height), "white")
+
+        y_offset = 0
+        for img in images:
+            combined.paste(img, (0, y_offset))
+            y_offset += img.height
+
+        combined.save(output_path)
