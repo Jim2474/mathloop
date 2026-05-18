@@ -174,3 +174,91 @@ def detect_questions(doc: fitz.Document, chapter_num: int) -> List[QuestionBound
             question_starts[i].y_end = 800  # Approximate page bottom
 
     return question_starts
+
+
+@dataclass
+class AnswerBoundary:
+    """Represents the boundary of an answer."""
+    question_no: int
+    page_start: int  # 1-indexed
+    y_start: float
+    page_end: int  # 1-indexed
+    y_end: float
+
+
+def _normalize_ocr_number(text: str) -> str:
+    """Normalize OCR errors in leading number (e.g., '1O' → '10').
+
+    Only normalizes the leading number portion, then preserves the rest.
+    """
+    ocr_map = str.maketrans('OolISBGZ', '00115862')
+    prefix = []
+    for ch in text:
+        if ch.isdigit() or ch in 'OolISBGZ':
+            prefix.append(ch.translate(ocr_map))
+        else:
+            break
+    rest = text[len(prefix):]
+    return ''.join(prefix) + rest
+
+
+def detect_answers(doc: fitz.Document, chapter_num: int) -> List[AnswerBoundary]:
+    """Detect answers in a chapter's answer section."""
+    config = CHAPTER_CONFIG[chapter_num]
+    answers: List[AnswerBoundary] = []
+    current_answer_no = 0
+
+    for pg_idx in range(config["answer_start"] - 1, config["answer_end"]):
+        page = doc[pg_idx]
+        blocks = parse_text_blocks(page)
+
+        for block in blocks:
+            if block.x >= 130:
+                continue
+
+            # Try primary pattern: number + separator + 解/证
+            match = re.match(
+                r'^(\d+)\s*[.．∙，,：:]\s*[\[【（(]?[解证]', block.text
+            )
+            if match:
+                a_num = int(match.group(1))
+            else:
+                # Fallback: number + separator (for answers without 解/证)
+                match = re.match(
+                    r'^(\d+)\s*[.．∙，,：:]', block.text
+                )
+                if match and len(block.text) <= 50:
+                    a_num = int(match.group(1))
+                else:
+                    # Try OCR-normalized match for numbers like "1O"
+                    ocr_text = _normalize_ocr_number(block.text)
+                    match = re.match(
+                        r'^(\d+)\s*[.．∙，,：:]', ocr_text
+                    )
+                    if match and len(block.text) <= 50:
+                        a_num = int(match.group(1))
+                    else:
+                        continue
+
+            # Accept if number is greater than current (incremental)
+            if a_num > current_answer_no:
+                current_answer_no = a_num
+                answers.append(AnswerBoundary(
+                    question_no=a_num,
+                    page_start=block.page_num,
+                    y_start=block.y,
+                    page_end=0,
+                    y_end=0
+                ))
+
+    # Set end boundaries
+    for i in range(len(answers)):
+        if i < len(answers) - 1:
+            next_a = answers[i + 1]
+            answers[i].page_end = next_a.page_start
+            answers[i].y_end = next_a.y_start
+        else:
+            answers[i].page_end = config["answer_end"]
+            answers[i].y_end = 800
+
+    return answers

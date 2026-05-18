@@ -6,7 +6,7 @@ import re
 # Add book directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary
+from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary
 
 
 def test_load_pdf():
@@ -66,5 +66,28 @@ def test_detect_questions_chapter1():
     # Check that questions are sequential
     for i, q in enumerate(questions):
         assert q.question_no == i + 1
+
+    doc.close()
+
+
+def test_detect_answers_chapter1():
+    """Test answer detection for chapter 1."""
+    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    doc = load_pdf(pdf_path)
+
+    # Detect answers in chapter 1
+    answers = detect_answers(doc, chapter_num=1)
+
+    # Should detect most answers (answer 39 is missing from PDF)
+    questions = detect_questions(doc, chapter_num=1)
+    assert len(answers) >= len(questions) - 1  # Allow 1 gap for missing answer 39
+
+    # First answer should be on page 147
+    assert answers[0].page_start == 147
+    assert answers[0].question_no == 1
+
+    # Answers should be in sequential order
+    for i in range(1, len(answers)):
+        assert answers[i].question_no > answers[i - 1].question_no
 
     doc.close()
