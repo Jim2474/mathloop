@@ -4,8 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 use tauri::{Manager, Runtime};
@@ -41,8 +40,8 @@ fn bootstrap_mathloop_data<R: Runtime>(
     app: tauri::AppHandle<R>,
     book_id: Option<String>,
 ) -> Result<BootstrapInfo, String> {
-    // Run migration first (will be added in Task 3)
-    // run_migration(&app)?;
+    // Run migration first
+    run_migration(&app)?;
 
     let top_dir = mathloop_data_dir()?;
     fs::create_dir_all(&top_dir).map_err(to_string)?;
@@ -142,7 +141,10 @@ fn review_store_remove(key: String, book_id: Option<String>) -> Result<(), Strin
     };
 
     connection
-        .execute("DELETE FROM review_store WHERE key = ?1", params![effective_key])
+        .execute(
+            "DELETE FROM review_store WHERE key = ?1",
+            params![effective_key],
+        )
         .map_err(to_string)?;
     Ok(())
 }
@@ -393,7 +395,9 @@ fn ensure_database(db_path: &Path) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(to_string)?;
     }
     let connection = Connection::open(db_path).map_err(to_string)?;
-    connection.execute_batch(REVIEW_TABLE_SQL).map_err(to_string)
+    connection
+        .execute_batch(REVIEW_TABLE_SQL)
+        .map_err(to_string)
 }
 
 fn create_startup_backup(db_path: &Path, data_dir: &Path) -> Result<Option<PathBuf>, String> {
@@ -429,12 +433,23 @@ fn prune_backups(backup_dir: &Path, keep: usize) -> Result<(), String> {
         .map_err(to_string)?
         .filter_map(Result::ok)
         .filter(|entry| {
-            entry.file_type().map(|file_type| file_type.is_file()).unwrap_or(false)
-                && entry.file_name().to_string_lossy().starts_with("mathloop-auto-")
+            entry
+                .file_type()
+                .map(|file_type| file_type.is_file())
+                .unwrap_or(false)
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("mathloop-auto-")
         })
         .collect::<Vec<_>>();
 
-    files.sort_by_key(|entry| entry.metadata().and_then(|metadata| metadata.modified()).ok());
+    files.sort_by_key(|entry| {
+        entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    });
     let excess = files.len().saturating_sub(keep);
     for entry in files.into_iter().take(excess) {
         let _ = fs::remove_file(entry.path());
@@ -483,7 +498,11 @@ fn read_external_or_resource_file<R: Runtime>(
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let public_file = manifest_dir.parent().unwrap_or(&manifest_dir).join("public").join(relative_path);
+    let public_file = manifest_dir
+        .parent()
+        .unwrap_or(&manifest_dir)
+        .join("public")
+        .join(relative_path);
     fs::read_to_string(public_file).map_err(to_string)
 }
 
@@ -513,7 +532,11 @@ fn read_external_or_resource_bytes<R: Runtime>(
 }
 
 fn normalize_relative_asset_path(path: &str) -> Result<String, String> {
-    let normalized = path.trim().replace('\\', "/").trim_start_matches('/').to_string();
+    let normalized = path
+        .trim()
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .to_string();
     if normalized.is_empty()
         || normalized.contains("..")
         || normalized.contains(':')
@@ -615,6 +638,136 @@ fn write_registry(connection: &Connection, entries: &[BookEntry]) -> Result<(), 
             params![BOOK_REGISTRY_KEY, json, Local::now().to_rfc3339()],
         )
         .map_err(to_string)?;
+    Ok(())
+}
+
+fn run_migration<R: Runtime>(_app: &tauri::AppHandle<R>) -> Result<(), String> {
+    let top_dir = mathloop_data_dir()?;
+    let default_book_dir = top_dir.join("books").join("default");
+
+    // Idempotency: skip if already migrated
+    if default_book_dir.exists() {
+        return Ok(());
+    }
+
+    let db_path = top_dir.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(&db_path).map_err(to_string)?;
+
+    // Check migration version
+    let migrated: Option<String> = connection
+        .query_row(
+            "SELECT value FROM review_store WHERE key = ?1",
+            params![MIGRATION_VERSION_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(to_string)?;
+    if migrated.is_some() {
+        return Ok(());
+    }
+
+    // Step 1: Pre-migration backup
+    let review_state: Option<String> = connection
+        .query_row(
+            "SELECT value FROM review_store WHERE key = ?1",
+            params![OLD_REVIEW_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(to_string)?;
+
+    if let Some(ref state) = review_state {
+        let backup_dir = top_dir.join("backups");
+        fs::create_dir_all(&backup_dir).map_err(to_string)?;
+        let backup_path = backup_dir.join(format!(
+            "pre-migration-{}.json",
+            Local::now().format("%Y-%m-%d-%H-%M-%S")
+        ));
+        fs::write(&backup_path, state).map_err(to_string)?;
+    }
+
+    // Step 2: Create book directories
+    for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+        fs::create_dir_all(default_book_dir.join(sub)).map_err(to_string)?;
+    }
+
+    // Step 3: Move existing data (rename)
+    for child in ["data", "questions", "answers", "pages", "question-fixes"] {
+        let source = top_dir.join(child);
+        let target = default_book_dir.join(child);
+        if source.exists() && !target.exists() {
+            fs::rename(&source, &target).map_err(to_string)?;
+        }
+    }
+
+    // Step 4: Migrate SQLite keys in a transaction
+    if review_state.is_some() {
+        connection.execute_batch("BEGIN;").map_err(to_string)?;
+
+        let migrate_result = (|| -> Result<(), String> {
+            connection
+                .execute(
+                    "INSERT INTO review_store (key, value, updated_at)
+                 SELECT ?1, value, updated_at
+                 FROM review_store WHERE key = ?2",
+                    params![
+                        format!("{}{}", NEW_REVIEW_KEY_PREFIX, "default"),
+                        OLD_REVIEW_KEY
+                    ],
+                )
+                .map_err(to_string)?;
+
+            connection
+                .execute(
+                    "DELETE FROM review_store WHERE key = ?1",
+                    params![OLD_REVIEW_KEY],
+                )
+                .map_err(to_string)?;
+
+            // Extract and save shared settings
+            if let Ok(parsed) =
+                serde_json::from_str::<serde_json::Value>(review_state.as_ref().unwrap())
+            {
+                if let Some(settings) = parsed.get("settings") {
+                    if let Ok(settings_json) = serde_json::to_string(settings) {
+                        connection
+                            .execute(
+                                "INSERT OR REPLACE INTO review_store (key, value, updated_at)
+                             VALUES (?1, ?2, ?3)",
+                                params![SETTINGS_KEY, settings_json, Local::now().to_rfc3339()],
+                            )
+                            .map_err(to_string)?;
+                    }
+                }
+            }
+
+            connection
+                .execute(
+                    "INSERT OR REPLACE INTO review_store (key, value, updated_at)
+                 VALUES (?1, ?2, ?3)",
+                    params![MIGRATION_VERSION_KEY, "1", Local::now().to_rfc3339()],
+                )
+                .map_err(to_string)?;
+
+            Ok(())
+        })();
+
+        if migrate_result.is_err() {
+            let _ = connection.execute_batch("ROLLBACK;");
+            return migrate_result;
+        }
+        connection.execute_batch("COMMIT;").map_err(to_string)?;
+    }
+
+    // Step 5: Write book registry
+    let registry = vec![BookEntry {
+        id: "default".to_string(),
+        name: "现有题库".to_string(),
+        added_at: Local::now().to_rfc3339(),
+    }];
+    write_registry(&connection, &registry)?;
+
     Ok(())
 }
 
