@@ -6,7 +6,7 @@ import re
 # Add book directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary, crop_question_image, crop_answer_image
+from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary, crop_question_image, crop_answer_image, generate_question_entry, generate_questions_json
 from PIL import Image
 
 
@@ -118,4 +118,55 @@ def test_crop_question_image():
 
     # Cleanup
     os.remove(output_path)
+    doc.close()
+
+
+def test_generate_question_entry():
+    """Test question entry generation."""
+    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    doc = load_pdf(pdf_path)
+
+    # Get first question and answer
+    questions = detect_questions(doc, chapter_num=1)
+    answers = detect_answers(doc, chapter_num=1)
+
+    # Generate entry
+    entry = generate_question_entry(
+        chapter_num=1,
+        question=questions[0],
+        answer=answers[0]
+    )
+
+    # Verify required fields
+    assert entry["id"] == "book002_ch01_p006_q001"
+    assert entry["bookName"] == "武忠祥高等数学辅导讲义·严选题"
+    assert entry["chapter"] == "第一章 函数 极限 连续"
+    # Section may be empty if PDF doesn't contain extractable section headers
+    assert isinstance(entry["section"], str)
+    assert entry["questionNo"] == "1"
+    assert entry["pageStart"] == 6
+    assert entry["pageEnd"] == 6
+    assert entry["questionImage"] == "questions/book002_ch01_p006_q001.png"
+    assert entry["answerImage"] == "answers/book002_ch01_p006_q001_answer.png"
+    assert entry["status"] == "new"
+    assert entry["difficulty"] == 3
+    assert entry["valueStar"] == 3
+
+    # Verify fsrs structure
+    assert entry["fsrs"]["state"] == "new"
+    assert entry["fsrs"]["difficulty"] is None
+    assert entry["fsrs"]["reviewCount"] == 0
+
+    # Verify review structure
+    assert entry["review"]["mastery"] == 0
+    assert entry["review"]["history"] == []
+
+    # Verify meta structure
+    assert entry["meta"]["source"] == "pdf"
+    assert entry["meta"]["uncertain"] == False
+
+    # Verify answerMeta structure
+    assert entry["answerMeta"]["source"] == "pdf_answer_section"
+    assert entry["answerMeta"]["answerPageStart"] == 147
+
     doc.close()

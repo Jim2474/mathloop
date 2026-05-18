@@ -380,3 +380,110 @@ def crop_answer_image(
             y_offset += img.height
 
         combined.save(output_path)
+
+
+def generate_question_entry(
+    chapter_num: int,
+    question: QuestionBoundary,
+    answer: AnswerBoundary
+) -> Dict:
+    """Generate a question entry in the required JSON format."""
+    config = CHAPTER_CONFIG[chapter_num]
+
+    # Generate ID
+    q_id = f"book002_ch{chapter_num:02d}_p{question.page_start:03d}_q{question.question_no:03d}"
+
+    # Generate image paths
+    question_image = f"questions/{q_id}.png"
+    answer_image = f"answers/{q_id}_answer.png"
+
+    # Generate page range text
+    if question.page_start == question.page_end:
+        page_range_text = f"PDF第{question.page_start}页"
+    else:
+        page_range_text = f"PDF第{question.page_start}-{question.page_end}页"
+
+    return {
+        "id": q_id,
+        "bookName": "武忠祥高等数学辅导讲义·严选题",
+        "chapter": config["name"],
+        "section": question.section,
+        "questionNo": str(question.question_no),
+        "pageStart": question.page_start,
+        "pageEnd": question.page_end,
+        "pdfPageLabel": str(question.page_start),
+        "printedPageNumber": "",
+        "pageRangeText": page_range_text,
+        "questionText": "",
+        "questionImage": question_image,
+        "questionImages": [],
+        "answerImage": answer_image,
+        "answerImages": [],
+        "knowledgeTags": [],
+        "mistakeTags": [],
+        "difficulty": 3,
+        "valueStar": 3,
+        "status": "new",
+        "fsrs": {
+            "state": "new",
+            "difficulty": None,
+            "stability": None,
+            "retrievability": None,
+            "lastReview": None,
+            "nextReview": None,
+            "reviewCount": 0,
+            "lapseCount": 0
+        },
+        "review": {
+            "mastery": 0,
+            "lastResult": None,
+            "history": []
+        },
+        "meta": {
+            "source": "pdf",
+            "uncertain": False,
+            "note": ""
+        },
+        "answerMeta": {
+            "source": "pdf_answer_section",
+            "answerPageStart": answer.page_start,
+            "answerPageEnd": answer.page_end,
+            "printedPageNumber": "",
+            "uncertain": False,
+            "note": ""
+        }
+    }
+
+
+def generate_questions_json(
+    doc: fitz.Document,
+    output_path: str
+) -> List[Dict]:
+    """Generate questions.json for all chapters."""
+    all_questions = []
+
+    for chapter_num in range(1, 7):  # Chapters 1-6
+        print(f"Processing chapter {chapter_num}...")
+
+        # Detect questions and answers
+        questions = detect_questions(doc, chapter_num)
+        answers = detect_answers(doc, chapter_num)
+
+        # Build answer lookup by question number
+        answer_map = {a.question_no: a for a in answers}
+
+        # Match questions with answers by question number
+        for q in questions:
+            answer = answer_map.get(q.question_no)
+            if answer:
+                entry = generate_question_entry(chapter_num, q, answer)
+                all_questions.append(entry)
+            else:
+                print(f"Warning: No answer found for question {q.question_no} in chapter {chapter_num}")
+
+    # Save to file
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(all_questions, f, ensure_ascii=False, indent=2)
+
+    return all_questions
