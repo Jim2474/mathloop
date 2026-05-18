@@ -37,23 +37,47 @@ struct BookEntry {
 }
 
 #[tauri::command]
-fn bootstrap_mathloop_data<R: Runtime>(app: tauri::AppHandle<R>) -> Result<BootstrapInfo, String> {
-    let data_dir = mathloop_data_dir()?;
-    fs::create_dir_all(&data_dir).map_err(to_string)?;
-    for child in ["data", "questions", "answers", "pages", "question-fixes", "backups"] {
-        fs::create_dir_all(data_dir.join(child)).map_err(to_string)?;
-    }
+fn bootstrap_mathloop_data<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    book_id: Option<String>,
+) -> Result<BootstrapInfo, String> {
+    // Run migration first (will be added in Task 3)
+    // run_migration(&app)?;
 
-    copy_missing_resource_dir(&app, "data", &data_dir.join("data"))?;
-    copy_missing_resource_dir(&app, "questions", &data_dir.join("questions"))?;
-    copy_missing_resource_dir(&app, "answers", &data_dir.join("answers"))?;
-    copy_missing_resource_dir(&app, "pages", &data_dir.join("pages"))?;
-    copy_missing_resource_dir(&app, "question-fixes", &data_dir.join("question-fixes"))?;
+    let top_dir = mathloop_data_dir()?;
+    fs::create_dir_all(&top_dir).map_err(to_string)?;
 
-    let db_path = data_dir.join(DB_FILE);
+    let book_id = book_id.unwrap_or_else(|| "default".to_string());
+
+    // If book_id is "default" and books/default doesn't exist yet, run legacy path
+    let data_dir = if book_id == "default" && !top_dir.join("books").join("default").exists() {
+        // Legacy: use top-level dirs (pre-migration)
+        for child in ["data", "questions", "answers", "pages", "question-fixes"] {
+            fs::create_dir_all(top_dir.join(child)).map_err(to_string)?;
+        }
+        copy_missing_resource_dir(&app, "data", &top_dir.join("data"))?;
+        copy_missing_resource_dir(&app, "questions", &top_dir.join("questions"))?;
+        copy_missing_resource_dir(&app, "answers", &top_dir.join("answers"))?;
+        copy_missing_resource_dir(&app, "pages", &top_dir.join("pages"))?;
+        copy_missing_resource_dir(&app, "question-fixes", &top_dir.join("question-fixes"))?;
+        top_dir.clone()
+    } else {
+        let book_dir = top_dir.join("books").join(&book_id);
+        for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+            fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
+        }
+        copy_missing_resource_dir(&app, "data", &book_dir.join("data"))?;
+        copy_missing_resource_dir(&app, "questions", &book_dir.join("questions"))?;
+        copy_missing_resource_dir(&app, "answers", &book_dir.join("answers"))?;
+        copy_missing_resource_dir(&app, "pages", &book_dir.join("pages"))?;
+        copy_missing_resource_dir(&app, "question-fixes", &book_dir.join("question-fixes"))?;
+        book_dir
+    };
+
+    let db_path = top_dir.join(DB_FILE);
     ensure_database(&db_path)?;
-    let backup_path = create_startup_backup(&db_path, &data_dir)?;
-    prune_backups(&data_dir.join("backups"), 30)?;
+    let backup_path = create_startup_backup(&db_path, &top_dir)?;
+    prune_backups(&top_dir.join("backups"), 30)?;
 
     Ok(BootstrapInfo {
         data_dir: path_to_string(&data_dir),
@@ -64,14 +88,20 @@ fn bootstrap_mathloop_data<R: Runtime>(app: tauri::AppHandle<R>) -> Result<Boots
 }
 
 #[tauri::command]
-fn review_store_get(key: String) -> Result<Option<String>, String> {
+fn review_store_get(key: String, book_id: Option<String>) -> Result<Option<String>, String> {
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
     let connection = Connection::open(db_path).map_err(to_string)?;
+
+    let effective_key = match book_id {
+        Some(ref bid) => review_key_for(bid, &key),
+        None => key.clone(),
+    };
+
     connection
         .query_row(
             "SELECT value FROM review_store WHERE key = ?1",
-            params![key],
+            params![effective_key],
             |row| row.get::<_, String>(0),
         )
         .optional()
@@ -79,56 +109,106 @@ fn review_store_get(key: String) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn review_store_set(key: String, value: String) -> Result<(), String> {
+fn review_store_set(key: String, value: String, book_id: Option<String>) -> Result<(), String> {
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
     let connection = Connection::open(db_path).map_err(to_string)?;
+
+    let effective_key = match book_id {
+        Some(ref bid) => review_key_for(bid, &key),
+        None => key.clone(),
+    };
+
     connection
         .execute(
             "INSERT INTO review_store (key, value, updated_at)
              VALUES (?1, ?2, ?3)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-            params![key, value, Local::now().to_rfc3339()],
+            params![effective_key, value, Local::now().to_rfc3339()],
         )
         .map_err(to_string)?;
     Ok(())
 }
 
 #[tauri::command]
-fn review_store_remove(key: String) -> Result<(), String> {
+fn review_store_remove(key: String, book_id: Option<String>) -> Result<(), String> {
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
     let connection = Connection::open(db_path).map_err(to_string)?;
+
+    let effective_key = match book_id {
+        Some(ref bid) => review_key_for(bid, &key),
+        None => key.clone(),
+    };
+
     connection
-        .execute("DELETE FROM review_store WHERE key = ?1", params![key])
+        .execute("DELETE FROM review_store WHERE key = ?1", params![effective_key])
         .map_err(to_string)?;
     Ok(())
 }
 
 #[tauri::command]
-fn load_questions_json<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
-    read_external_or_resource_file(&app, "data/questions.json")
+fn load_questions_json<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    book_id: Option<String>,
+) -> Result<String, String> {
+    match book_id {
+        Some(ref bid) => {
+            let book_dir = resolve_book_dir(bid)?;
+            let path = book_dir.join("data").join("questions.json");
+            if path.exists() {
+                return fs::read_to_string(path).map_err(to_string);
+            }
+            // Fallback to resource
+            read_external_or_resource_file(&app, "data/questions.json")
+        }
+        None => read_external_or_resource_file(&app, "data/questions.json"),
+    }
 }
 
 #[tauri::command]
-fn load_question_image_fixes_json<R: Runtime>(app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
-    match read_external_or_resource_file(&app, "data/question-image-fixes.json") {
+fn load_question_image_fixes_json<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    book_id: Option<String>,
+) -> Result<Option<String>, String> {
+    let result = match book_id {
+        Some(ref bid) => {
+            let book_dir = resolve_book_dir(bid)?;
+            let path = book_dir.join("data").join("question-image-fixes.json");
+            if path.exists() {
+                fs::read_to_string(path).map_err(to_string)
+            } else {
+                read_external_or_resource_file(&app, "data/question-image-fixes.json")
+            }
+        }
+        None => read_external_or_resource_file(&app, "data/question-image-fixes.json"),
+    };
+
+    match result {
         Ok(value) => Ok(Some(value)),
         Err(_) => Ok(None),
     }
 }
 
 #[tauri::command]
-fn update_question_tips(question_id: String, tips: String) -> Result<(), String> {
+fn update_question_tips(
+    book_id: Option<String>,
+    question_id: String,
+    tips: String,
+) -> Result<(), String> {
     let question_id = question_id.trim();
     if question_id.is_empty() {
         return Err("题目 ID 不能为空。".to_string());
     }
 
-    let data_dir = mathloop_data_dir()?;
-    let questions_path = data_dir.join("data").join("questions.json");
+    let data_dir = match &book_id {
+        Some(bid) => resolve_book_dir(bid)?.join("data"),
+        None => mathloop_data_dir()?.join("data"),
+    };
+    let questions_path = data_dir.join("questions.json");
+
     if !questions_path.exists() {
-        return Err("外部题库 data/questions.json 不存在，无法保存 tips。".to_string());
+        return Err("题库 questions.json 不存在，无法保存 tips。".to_string());
     }
 
     let original = fs::read_to_string(&questions_path).map_err(to_string)?;
@@ -149,7 +229,7 @@ fn update_question_tips(question_id: String, tips: String) -> Result<(), String>
         return Err("题目数据格式不正确。".to_string());
     };
 
-    let backup_dir = data_dir.join("backups");
+    let backup_dir = mathloop_data_dir()?.join("backups");
     fs::create_dir_all(&backup_dir).map_err(to_string)?;
     let backup_path = backup_dir.join(format!(
         "questions-before-tip-{}.json",
