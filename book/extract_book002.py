@@ -116,3 +116,61 @@ def parse_text_blocks(page: fitz.Page) -> List[TextBlock]:
             ))
 
     return blocks
+
+
+@dataclass
+class QuestionBoundary:
+    """Represents the boundary of a question."""
+    question_no: int
+    page_start: int  # 1-indexed
+    y_start: float
+    page_end: int  # 1-indexed
+    y_end: float
+    section: str
+
+
+def detect_questions(doc: fitz.Document, chapter_num: int) -> List[QuestionBoundary]:
+    """Detect questions in a chapter."""
+    config = CHAPTER_CONFIG[chapter_num]
+    current_section = ""
+    question_starts: List[QuestionBoundary] = []
+
+    for pg_idx in range(config["question_start"] - 1, config["question_end"]):
+        page = doc[pg_idx]
+        blocks = parse_text_blocks(page)
+
+        for block in blocks:
+            # Detect section headers
+            if re.match(r'^[一二三四五六七八九十]+[、．.]', block.text):
+                if "选择题" in block.text:
+                    current_section = "一、选择题"
+                elif "填空题" in block.text:
+                    current_section = "二、填空题"
+                elif "解答题" in block.text:
+                    current_section = "三、解答题"
+                continue
+
+            # Detect question numbers (allow space before dot: "4 .xxx")
+            match = re.match(r'^(\d+)\s*[.．]', block.text)
+            if match and block.x < 100 and block.y > 50:
+                next_no = len(question_starts) + 1
+                question_starts.append(QuestionBoundary(
+                    question_no=next_no,
+                    page_start=block.page_num,
+                    y_start=block.y,
+                    page_end=0,
+                    y_end=0,
+                    section=current_section
+                ))
+
+    # Set end boundaries
+    for i in range(len(question_starts)):
+        if i < len(question_starts) - 1:
+            next_q = question_starts[i + 1]
+            question_starts[i].page_end = next_q.page_start
+            question_starts[i].y_end = next_q.y_start
+        else:
+            question_starts[i].page_end = config["question_end"]
+            question_starts[i].y_end = 800  # Approximate page bottom
+
+    return question_starts
