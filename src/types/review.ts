@@ -98,6 +98,7 @@ export type ReviewCleanupResult = {
 
 export type ReviewBackupData = {
   version: number;
+  bookId?: string | null;
   exportedAt: string;
   cards: Record<string, ReviewCardRecord>;
   reviewLogs: ReviewLog[];

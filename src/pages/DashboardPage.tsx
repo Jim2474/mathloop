@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import StatCard from "../components/dashboard/StatCard";
 import { getReviewDashboardStats } from "../services/dashboardStats";
+import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import { getDashboardStats } from "../utils/questionStats";
@@ -9,6 +10,8 @@ import { getDashboardStats } from "../utils/questionStats";
 export default function DashboardPage() {
   const { questions, isLoading, error } = useQuestionStore();
   const { cards, reviewLogs, mistakeRecords } = useReviewStore();
+  const { books, activeBookId } = useBookStore();
+  const currentBook = books.find((b) => b.id === activeBookId);
   const stats = getDashboardStats(questions);
   const reviewStats = getReviewDashboardStats(questions, cards, reviewLogs, mistakeRecords);
 
@@ -24,7 +27,9 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <section className="apple-hero-glass overflow-hidden rounded-[32px] px-6 py-16 text-center md:px-10 md:py-20">
         <div className="apple-hero-content mx-auto max-w-3xl">
-          <p className="text-[13px] font-medium tracking-[-0.12px] text-moss">Local FSRS review system</p>
+          <p className="text-[13px] font-medium tracking-[-0.12px] text-moss">
+            {currentBook ? currentBook.name : "Local FSRS review system"}
+          </p>
           <h2 className="mx-auto mt-4 max-w-3xl text-[2.75rem] font-semibold leading-[1.04] tracking-[-0.48px] text-ink md:text-[4.25rem]">
             Review smarter, not wider.
           </h2>

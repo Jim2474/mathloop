@@ -22,9 +22,11 @@ export function createReviewBackup(
   questionFingerprints: Record<string, ReviewQuestionFingerprint> = {},
   lastSyncResult: ReviewSyncResult | null = null,
   dailyReviewSession: DailyReviewSession | null = null,
+  bookId: string | null = null,
 ): ReviewBackupData {
   return {
     version: REVIEW_BACKUP_VERSION,
+    bookId,
     exportedAt: new Date().toISOString(),
     cards,
     reviewLogs,
@@ -90,6 +92,7 @@ export function validateReviewBackup(value: unknown): ReviewBackupData {
 
   return {
     version: REVIEW_BACKUP_VERSION,
+    bookId: typeof value.bookId === "string" ? value.bookId : null,
     exportedAt: value.exportedAt,
     cards: value.cards as Record<string, ReviewCardRecord>,
     reviewLogs: value.reviewLogs as ReviewLog[],

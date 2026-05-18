@@ -9,6 +9,7 @@ import {
 } from "../services/backupService";
 import { getLibrarySyncPreview } from "../services/librarySyncService";
 import { useAssetUrl } from "../hooks/useAssetUrl";
+import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { ReviewSettings } from "../types/review";
@@ -17,6 +18,8 @@ type ImageStatus = "pending" | "ok" | "missing";
 
 export default function BackupPage() {
   const { questions, isLoading, error } = useQuestionStore();
+  const { books, activeBookId } = useBookStore();
+  const currentBook = books.find((b) => b.id === activeBookId);
   const {
     cards,
     reviewLogs,
@@ -110,6 +113,7 @@ export default function BackupPage() {
       questionFingerprints,
       lastSyncResult,
       dailyReviewSession,
+      activeBookId,
     );
     downloadReviewBackup(backup);
     setMessage("已生成本地复习数据备份。");
@@ -126,13 +130,21 @@ export default function BackupPage() {
     setMessage(null);
     setImportError(null);
 
-    const confirmed = window.confirm("导入备份会覆盖当前本地复习状态，确定继续吗？");
-    if (!confirmed) {
-      return;
-    }
-
     try {
       const backup = await readBackupFile(file);
+
+      if (backup.bookId && backup.bookId !== activeBookId) {
+        const confirmed = window.confirm(
+          `此备份来自《${backup.bookId}》，当前活跃书是《${currentBook?.name ?? activeBookId}》。确认导入吗？`,
+        );
+        if (!confirmed) return;
+      }
+
+      const confirmed = window.confirm("导入备份会覆盖当前本地复习状态，确定继续吗？");
+      if (!confirmed) {
+        return;
+      }
+
       importReviewState({
         cards: backup.cards,
         reviewLogs: backup.reviewLogs,
