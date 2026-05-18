@@ -1,6 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { BookEntry } from "../types/book";
 
-type BootstrapInfo = {
+export type BootstrapInfo = {
   dataDir: string;
   dbPath: string;
   createdBackup: boolean;
@@ -14,15 +15,20 @@ export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export async function initializeDesktopRuntime(): Promise<BootstrapInfo | null> {
+export async function initializeDesktopRuntime(bookId?: string): Promise<BootstrapInfo | null> {
   if (!isTauriRuntime()) {
     return null;
   }
-  bootstrapPromise ??= invoke<BootstrapInfo>("bootstrap_mathloop_data").then((info) => {
+  bootstrapPromise ??= invoke<BootstrapInfo>("bootstrap_mathloop_data", { bookId: bookId ?? null }).then((info) => {
     desktopDataDir = info.dataDir;
     return info;
   });
   return bootstrapPromise;
+}
+
+export function resetDesktopRuntime(): void {
+  bootstrapPromise = null;
+  desktopDataDir = "";
 }
 
 export async function invokeDesktop<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -46,10 +52,46 @@ export async function loadDesktopAssetDataUrl(path: string): Promise<string> {
   return invokeDesktop<string>("load_asset_data_url", { relativePath: path });
 }
 
-export async function updateDesktopQuestionTips(questionId: string, tips: string): Promise<void> {
+export async function updateDesktopQuestionTips(
+  questionId: string,
+  tips: string,
+  bookId?: string,
+): Promise<void> {
   if (!isTauriRuntime()) {
     throw new Error("只有桌面版可以把 tips 保存到外部题库。");
   }
+  await initializeDesktopRuntime(bookId);
+  await invokeDesktop<void>("update_question_tips", { questionId, tips, bookId: bookId ?? null });
+}
+
+export async function listDesktopBooks(): Promise<BookEntry[]> {
+  if (!isTauriRuntime()) {
+    return [];
+  }
   await initializeDesktopRuntime();
-  await invokeDesktop<void>("update_question_tips", { questionId, tips });
+  return invokeDesktop<BookEntry[]>("list_books");
+}
+
+export async function addDesktopBook(bookId: string, name: string): Promise<BookEntry> {
+  if (!isTauriRuntime()) {
+    throw new Error("只有桌面版可以添加书本。");
+  }
+  await initializeDesktopRuntime();
+  return invokeDesktop<BookEntry>("add_book", { bookId, name });
+}
+
+export async function removeDesktopBook(bookId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    throw new Error("只有桌面版可以移除书本。");
+  }
+  await initializeDesktopRuntime();
+  await invokeDesktop<void>("remove_book", { bookId });
+}
+
+export async function setActiveDesktopBook(bookId: string): Promise<BootstrapInfo> {
+  if (!isTauriRuntime()) {
+    throw new Error("只有桌面版可以切换书本。");
+  }
+  await initializeDesktopRuntime();
+  return invokeDesktop<BootstrapInfo>("set_active_book", { bookId });
 }
