@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Local;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     env,
@@ -26,6 +26,14 @@ struct BootstrapInfo {
     db_path: String,
     created_backup: bool,
     backup_path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct BookEntry {
+    id: String,
+    name: String,
+    added_at: String,
 }
 
 #[tauri::command]
@@ -178,10 +186,106 @@ fn load_asset_data_url<R: Runtime>(
     ))
 }
 
+#[tauri::command]
+fn list_books() -> Result<Vec<BookEntry>, String> {
+    let db_path = mathloop_data_dir()?.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(db_path).map_err(to_string)?;
+    read_registry_raw(&connection)
+}
+
+#[tauri::command]
+fn add_book(book_id: String, name: String) -> Result<BookEntry, String> {
+    validate_book_id(&book_id)?;
+
+    let db_path = mathloop_data_dir()?.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(&db_path).map_err(to_string)?;
+
+    let existing = read_registry_raw(&connection)?;
+    if existing.iter().any(|e| e.id == book_id) {
+        return Err("书本已存在。".to_string());
+    }
+
+    let book_dir = mathloop_data_dir()?.join("books").join(&book_id);
+    for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+        fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
+    }
+
+    let entry = BookEntry {
+        id: book_id,
+        name: name.trim().to_string(),
+        added_at: Local::now().to_rfc3339(),
+    };
+
+    let mut entries = existing;
+    entries.push(entry.clone());
+    write_registry(&connection, &entries)?;
+
+    Ok(entry)
+}
+
+#[tauri::command]
+fn remove_book(book_id: String) -> Result<(), String> {
+    validate_book_id(&book_id)?;
+
+    let db_path = mathloop_data_dir()?.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(&db_path).map_err(to_string)?;
+
+    let mut entries = read_registry_raw(&connection)?;
+    let before_len = entries.len();
+    entries.retain(|e| e.id != book_id);
+
+    if entries.len() == before_len {
+        return Err("书本不在注册列表中。".to_string());
+    }
+
+    write_registry(&connection, &entries)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_active_book<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    book_id: String,
+) -> Result<BootstrapInfo, String> {
+    validate_book_id(&book_id)?;
+
+    let top_dir = mathloop_data_dir()?;
+    let db_path = top_dir.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(&db_path).map_err(to_string)?;
+
+    let entries = read_registry_raw(&connection)?;
+    if !entries.iter().any(|e| e.id == book_id) {
+        return Err("书本未注册。".to_string());
+    }
+
+    let book_dir = resolve_book_dir(&book_id)?;
+    let questions_path = book_dir.join("data").join("questions.json");
+    if !questions_path.exists() {
+        return Err("书本缺少 questions.json。".to_string());
+    }
+
+    create_startup_backup(&db_path, &top_dir)?;
+
+    Ok(BootstrapInfo {
+        data_dir: path_to_string(&book_dir),
+        db_path: path_to_string(&db_path),
+        created_backup: false,
+        backup_path: None,
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             bootstrap_mathloop_data,
+            list_books,
+            add_book,
+            remove_book,
+            set_active_book,
             review_store_get,
             review_store_set,
             review_store_remove,
@@ -368,6 +472,70 @@ fn copy_dir_missing(source: &Path, target: &Path) -> Result<(), String> {
 
 fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
+}
+
+const BOOK_REGISTRY_KEY: &str = "book-registry";
+const MIGRATION_VERSION_KEY: &str = "migration-version";
+const SETTINGS_KEY: &str = "settings";
+const OLD_REVIEW_KEY: &str = "openclaw-review-state";
+const NEW_REVIEW_KEY_PREFIX: &str = "review::";
+
+fn validate_book_id(book_id: &str) -> Result<(), String> {
+    if book_id.is_empty() || book_id.len() > 64 {
+        return Err("书本 ID 长度必须在 1-64 之间。".to_string());
+    }
+    if !book_id
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err("书本 ID 只能包含小写字母、数字和连字符。".to_string());
+    }
+    Ok(())
+}
+
+fn resolve_book_dir(book_id: &str) -> Result<PathBuf, String> {
+    let dir = mathloop_data_dir()?.join("books").join(book_id);
+    if !dir.exists() {
+        return Err(format!("书本目录不存在: {}", book_id));
+    }
+    Ok(dir)
+}
+
+fn review_key_for(book_id: &str, key: &str) -> String {
+    if key == SETTINGS_KEY {
+        key.to_string()
+    } else {
+        format!("{}{}", NEW_REVIEW_KEY_PREFIX, book_id)
+    }
+}
+
+fn read_registry_raw(connection: &Connection) -> Result<Vec<BookEntry>, String> {
+    let raw: Option<String> = connection
+        .query_row(
+            "SELECT value FROM review_store WHERE key = ?1",
+            params![BOOK_REGISTRY_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(to_string)?;
+
+    let Some(json) = raw else {
+        return Ok(vec![]);
+    };
+    serde_json::from_str(&json).map_err(to_string)
+}
+
+fn write_registry(connection: &Connection, entries: &[BookEntry]) -> Result<(), String> {
+    let json = serde_json::to_string(entries).map_err(to_string)?;
+    connection
+        .execute(
+            "INSERT INTO review_store (key, value, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![BOOK_REGISTRY_KEY, json, Local::now().to_rfc3339()],
+        )
+        .map_err(to_string)?;
+    Ok(())
 }
 
 fn to_string(error: impl std::fmt::Display) -> String {
