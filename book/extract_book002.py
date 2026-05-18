@@ -71,3 +71,48 @@ def load_pdf(pdf_path: str) -> fitz.Document:
 def get_chapter_config() -> Dict:
     """Get chapter configuration."""
     return CHAPTER_CONFIG
+
+
+@dataclass
+class TextBlock:
+    """Represents a text block with position information."""
+    text: str
+    x: float
+    y: float
+    width: float
+    height: float
+    page_num: int  # 1-indexed PDF page number
+
+
+def parse_text_blocks(page: fitz.Page) -> List[TextBlock]:
+    """Parse text blocks from a PDF page with position information."""
+    blocks = []
+    page_num = page.number + 1  # Convert to 1-indexed
+
+    # Get text dict with position info
+    text_dict = page.get_text("dict")
+
+    for block in text_dict["blocks"]:
+        if "lines" not in block:
+            continue
+
+        for line in block["lines"]:
+            # Combine spans into single text
+            text = "".join(span["text"] for span in line["spans"]).strip()
+            if not text:
+                continue
+
+            # Get bounding box
+            bbox = line["bbox"]
+            x, y, x2, y2 = bbox
+
+            blocks.append(TextBlock(
+                text=text,
+                x=x,
+                y=y,
+                width=x2 - x,
+                height=y2 - y,
+                page_num=page_num
+            ))
+
+    return blocks
