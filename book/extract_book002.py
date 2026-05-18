@@ -211,12 +211,26 @@ def detect_answers(doc: fitz.Document, chapter_num: int) -> List[AnswerBoundary]
     config = CHAPTER_CONFIG[chapter_num]
     answers: List[AnswerBoundary] = []
     current_answer_no = 0
+    found_chapter_header = False
 
     for pg_idx in range(config["answer_start"] - 1, config["answer_end"]):
         page = doc[pg_idx]
         blocks = parse_text_blocks(page)
 
         for block in blocks:
+            # Detect chapter header (e.g., "第二章一元函数微分学")
+            # This marks where this chapter's answers actually start
+            if re.match(r'^第[一二三四五六七八九十]+章', block.text):
+                found_chapter_header = True
+                # Reset answer counter for this chapter
+                current_answer_no = 0
+                answers = []
+                continue
+
+            # Skip blocks before the chapter header on the first page
+            if not found_chapter_header and pg_idx == config["answer_start"] - 1:
+                continue
+
             if block.x >= 130:
                 continue
 
@@ -247,8 +261,10 @@ def detect_answers(doc: fitz.Document, chapter_num: int) -> List[AnswerBoundary]
             # Accept if number is greater than current (incremental)
             if a_num > current_answer_no:
                 current_answer_no = a_num
+                # Use incremental numbering (1, 2, 3, ...) to match questions
+                answer_seq = len(answers) + 1
                 answers.append(AnswerBoundary(
-                    question_no=a_num,
+                    question_no=answer_seq,
                     page_start=block.page_num,
                     y_start=block.y,
                     page_end=0,
@@ -296,6 +312,9 @@ def crop_question_image(
         img = render_page_image(doc, question.page_start, dpi)
         y1 = max(0, int(question.y_start * scale) - padding)
         y2 = min(img.height, int(question.y_end * scale) + padding)
+        # Handle edge case where y_end < y_start
+        if y2 < y1:
+            y1, y2 = y2, y1
         cropped = img.crop((0, y1, img.width, y2))
         cropped.save(output_path)
     else:
@@ -348,6 +367,9 @@ def crop_answer_image(
         img = render_page_image(doc, answer.page_start, dpi)
         y1 = max(0, int(answer.y_start * scale) - padding)
         y2 = min(img.height, int(answer.y_end * scale) + padding)
+        # Handle edge case where y_end < y_start
+        if y2 < y1:
+            y1, y2 = y2, y1
         cropped = img.crop((0, y1, img.width, y2))
         cropped.save(output_path)
     else:

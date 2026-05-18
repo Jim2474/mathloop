@@ -189,8 +189,8 @@ def test_extract_book002():
 
     # Verify result
     assert result["success"] == True
-    assert result["total_questions"] >= 50
-    assert result["total_questions"] <= 200
+    assert result["total_questions"] >= 200
+    assert result["total_questions"] <= 300
 
     # Verify output files exist
     assert os.path.exists(os.path.join(output_dir, "data", "questions.json"))
