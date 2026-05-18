@@ -49,7 +49,8 @@ export const useQuestionStore = create<QuestionState>()(
         }
       },
       saveQuestionTips: async (questionId, tips) => {
-        await updateDesktopQuestionTips(questionId, tips);
+        const bookId = getActiveBookIdFromStorage();
+        await updateDesktopQuestionTips(questionId, tips, bookId ?? undefined);
         const questions = await loadOpenClawQuestions();
         set({ questions, error: null });
       },
@@ -71,3 +72,14 @@ export const useQuestionStore = create<QuestionState>()(
     },
   ),
 );
+
+function getActiveBookIdFromStorage(): string | null {
+  try {
+    const raw = localStorage.getItem("mathloop-active-book");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.activeBookId ?? null;
+  } catch {
+    return null;
+  }
+}

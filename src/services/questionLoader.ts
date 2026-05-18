@@ -5,17 +5,30 @@ import { initializeDesktopRuntime, invokeDesktop, isTauriRuntime } from "./deskt
 const QUESTIONS_URL = "/data/questions.json";
 const QUESTION_IMAGE_FIXES_URL = "/data/question-image-fixes.json";
 
+function getActiveBookId(): string | null {
+  try {
+    const raw = localStorage.getItem("mathloop-active-book");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.activeBookId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadOpenClawQuestions(): Promise<Question[]> {
+  const bookId = getActiveBookId();
+
   if (isTauriRuntime()) {
-    await initializeDesktopRuntime();
-    const text = await invokeDesktop<string>("load_questions_json");
+    await initializeDesktopRuntime(bookId ?? undefined);
+    const text = await invokeDesktop<string>("load_questions_json", { bookId });
     const data: unknown = JSON.parse(text);
 
     if (!Array.isArray(data)) {
       throw new Error("questions.json 顶层必须是题目数组。");
     }
 
-    setQuestionImageFixes(await loadDesktopQuestionImageFixes());
+    setQuestionImageFixes(await loadDesktopQuestionImageFixes(bookId));
     return data as Question[];
   }
 
@@ -35,9 +48,9 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
   return data as Question[];
 }
 
-async function loadDesktopQuestionImageFixes(): Promise<Record<string, string>> {
+async function loadDesktopQuestionImageFixes(bookId: string | null): Promise<Record<string, string>> {
   try {
-    const text = await invokeDesktop<string | null>("load_question_image_fixes_json");
+    const text = await invokeDesktop<string | null>("load_question_image_fixes_json", { bookId });
     if (!text) {
       return {};
     }

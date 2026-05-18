@@ -8,6 +8,7 @@ import QuestionDetailPage from "../pages/QuestionDetailPage";
 import QuestionListPage from "../pages/QuestionListPage";
 import ReviewPage from "../pages/ReviewPage";
 import { initializeDesktopRuntime } from "../services/desktopBridge";
+import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 
@@ -17,14 +18,24 @@ export default function App() {
   const hasHydrated = useReviewStore((state) => state.hasHydrated);
   const syncQuestionLibrary = useReviewStore((state) => state.syncQuestionLibrary);
 
+  const loadBooks = useBookStore((state) => state.loadBooks);
+  const activeBookId = useBookStore((state) => state.activeBookId);
+
+  // Load book list on mount
+  useEffect(() => {
+    void loadBooks();
+  }, [loadBooks]);
+
+  // Bootstrap and load questions when book is known
   useEffect(() => {
     async function boot() {
-      await initializeDesktopRuntime();
+      await initializeDesktopRuntime(activeBookId ?? undefined);
       await loadQuestions();
     }
     void boot();
-  }, [loadQuestions]);
+  }, [activeBookId, loadQuestions]);
 
+  // Sync review library when hydrated
   useEffect(() => {
     if (hasHydrated && questions.length > 0) {
       syncQuestionLibrary(questions);
