@@ -9,6 +9,8 @@ import re
 import json
 import os
 import io
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
@@ -487,3 +489,109 @@ def generate_questions_json(
         json.dump(all_questions, f, ensure_ascii=False, indent=2)
 
     return all_questions
+
+
+def extract_book002(
+    pdf_path: str,
+    output_dir: str
+) -> Dict:
+    """Main extraction pipeline."""
+    print(f"Starting extraction from: {pdf_path}")
+    print(f"Output directory: {output_dir}")
+
+    # Create output directories
+    os.makedirs(os.path.join(output_dir, "data"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "questions"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "answers"), exist_ok=True)
+
+    # Open PDF
+    doc = load_pdf(pdf_path)
+
+    # Generate questions.json
+    json_path = os.path.join(output_dir, "data", "questions.json")
+    questions = generate_questions_json(doc, json_path)
+
+    # Crop images for each question
+    print("\nCropping question and answer images...")
+    for i, q in enumerate(questions):
+        # Parse ID: book002_chXX_pYYY_qZZZ
+        id_match = re.match(r'book002_ch(\d+)_p(\d+)_q(\d+)', q["id"])
+        if not id_match:
+            print(f"Warning: Could not parse ID: {q['id']}")
+            continue
+        chapter_num = int(id_match.group(1))
+        question_no = int(id_match.group(3))
+
+        # Get boundaries
+        questions_boundary = detect_questions(doc, chapter_num)
+        answers_boundary = detect_answers(doc, chapter_num)
+
+        # Find matching boundaries
+        q_boundary = next((b for b in questions_boundary if b.question_no == question_no), None)
+        a_boundary = next((b for b in answers_boundary if b.question_no == question_no), None)
+
+        if q_boundary and a_boundary:
+            # Crop question image
+            q_img_path = os.path.join(output_dir, q["questionImage"])
+            crop_question_image(doc, q_boundary, q_img_path)
+
+            # Crop answer image
+            a_img_path = os.path.join(output_dir, q["answerImage"])
+            crop_answer_image(doc, a_boundary, a_img_path)
+
+            if (i + 1) % 10 == 0:
+                print(f"  Processed {i + 1}/{len(questions)} questions")
+
+    # Generate extraction log
+    log_path = os.path.join(output_dir, "extraction_log.txt")
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.write(f"Book002 Extraction Log\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write(f"PDF: {pdf_path}\n")
+        f.write(f"Total Questions: {len(questions)}\n\n")
+
+        # Per-chapter stats
+        for chapter_num in range(1, 7):
+            chapter_questions = [q for q in questions if re.match(r'book002_ch' + f'{chapter_num:02d}', q["id"])]
+            f.write(f"Chapter {chapter_num}: {len(chapter_questions)} questions\n")
+
+    # Generate audit.json
+    audit_path = os.path.join(output_dir, "audit.json")
+    audit_data = {
+        "generatedAt": datetime.now().isoformat(),
+        "pdfPath": pdf_path,
+        "totalQuestions": len(questions),
+        "chapters": {}
+    }
+
+    for chapter_num in range(1, 7):
+        chapter_questions = [q for q in questions if re.match(r'book002_ch' + f'{chapter_num:02d}', q["id"])]
+        audit_data["chapters"][chapter_num] = {
+            "name": CHAPTER_CONFIG[chapter_num]["name"],
+            "questionCount": len(chapter_questions)
+        }
+
+    with open(audit_path, 'w', encoding='utf-8') as f:
+        json.dump(audit_data, f, ensure_ascii=False, indent=2)
+
+    doc.close()
+
+    print(f"\nExtraction complete!")
+    print(f"Total questions: {len(questions)}")
+    print(f"Output saved to: {output_dir}")
+
+    return {
+        "success": True,
+        "total_questions": len(questions),
+        "output_dir": output_dir
+    }
+
+
+if __name__ == "__main__":
+    import sys
+
+    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    output_dir = r"G:\AI_Projects\Mathloop_04\book\output"
+
+    result = extract_book002(pdf_path, output_dir)
+    print(f"\nResult: {result}")

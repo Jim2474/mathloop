@@ -6,7 +6,7 @@ import re
 # Add book directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary, crop_question_image, crop_answer_image, generate_question_entry, generate_questions_json
+from extract_book002 import load_pdf, get_chapter_config, parse_text_blocks, TextBlock, detect_questions, QuestionBoundary, detect_answers, AnswerBoundary, crop_question_image, crop_answer_image, generate_question_entry, generate_questions_json, extract_book002
 from PIL import Image
 
 
@@ -170,3 +170,43 @@ def test_generate_question_entry():
     assert entry["answerMeta"]["answerPageStart"] == 147
 
     doc.close()
+
+
+def test_extract_book002():
+    """Test complete extraction pipeline."""
+    import json
+    import shutil
+
+    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    output_dir = "test_output"
+
+    # Cleanup from previous runs if exists
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+
+    # Run extraction
+    result = extract_book002(pdf_path, output_dir)
+
+    # Verify result
+    assert result["success"] == True
+    assert result["total_questions"] >= 50
+    assert result["total_questions"] <= 200
+
+    # Verify output files exist
+    assert os.path.exists(os.path.join(output_dir, "data", "questions.json"))
+    assert os.path.exists(os.path.join(output_dir, "questions"))
+    assert os.path.exists(os.path.join(output_dir, "answers"))
+    assert os.path.exists(os.path.join(output_dir, "extraction_log.txt"))
+    assert os.path.exists(os.path.join(output_dir, "audit.json"))
+
+    # Verify questions.json is valid
+    with open(os.path.join(output_dir, "data", "questions.json"), 'r', encoding='utf-8') as f:
+        questions = json.load(f)
+    assert len(questions) == result["total_questions"]
+
+    # Verify unique IDs
+    ids = [q["id"] for q in questions]
+    assert len(ids) == len(set(ids))
+
+    # Cleanup
+    shutil.rmtree(output_dir)
