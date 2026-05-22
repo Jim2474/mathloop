@@ -1,20 +1,19 @@
 import type { StateStorage } from "zustand/middleware";
 import { invokeDesktop, isTauriRuntime } from "./desktopBridge";
+import { getActiveBookId } from "../utils/bookId";
 
-function getActiveBookId(): string | null {
-  try {
-    const raw = localStorage.getItem("mathloop-active-book");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.activeBookId ?? null;
-  } catch {
-    return null;
-  }
+function bookScopedKey(name: string): string {
+  const bookId = getActiveBookId();
+  return bookId ? `${name}::${bookId}` : name;
 }
 
 export function createReviewPersistStorage(): StateStorage {
   if (!isTauriRuntime()) {
-    return localStorage;
+    return {
+      getItem: (name) => localStorage.getItem(bookScopedKey(name)),
+      setItem: (name, value) => localStorage.setItem(bookScopedKey(name), value),
+      removeItem: (name) => localStorage.removeItem(bookScopedKey(name)),
+    };
   }
 
   return {
@@ -35,7 +34,7 @@ export function createReviewPersistStorage(): StateStorage {
 
 export function removePersistedReviewState(name: string): void {
   if (!isTauriRuntime()) {
-    localStorage.removeItem(name);
+    localStorage.removeItem(bookScopedKey(name));
     return;
   }
   const bookId = getActiveBookId();

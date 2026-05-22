@@ -1,5 +1,6 @@
 import type { Question } from "../types/question";
 import { toDesktopAssetUrl } from "../services/desktopBridge";
+import { getActiveBookId } from "./bookId";
 
 let questionImageFixes: Record<string, string> = {};
 
@@ -16,7 +17,12 @@ export function toPublicAssetUrl(path: string): string {
   if (desktopUrl) {
     return desktopUrl;
   }
-  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const bookId = getActiveBookId();
+  if (bookId && !cleanPath.startsWith("/books/")) {
+    return `/books/${bookId}${cleanPath}`;
+  }
+  return cleanPath;
 }
 
 export function getQuestionImagePaths(question: Question): string[] {

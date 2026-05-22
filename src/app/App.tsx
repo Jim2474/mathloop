@@ -17,6 +17,7 @@ export default function App() {
   const questions = useQuestionStore((state) => state.questions);
   const hasHydrated = useReviewStore((state) => state.hasHydrated);
   const syncQuestionLibrary = useReviewStore((state) => state.syncQuestionLibrary);
+  const cleanupOrphanReviewData = useReviewStore((state) => state.cleanupOrphanReviewData);
 
   const loadBooks = useBookStore((state) => state.loadBooks);
   const activeBookId = useBookStore((state) => state.activeBookId);
@@ -39,8 +40,9 @@ export default function App() {
   useEffect(() => {
     if (hasHydrated && questions.length > 0) {
       syncQuestionLibrary(questions);
+      cleanupOrphanReviewData(questions);
     }
-  }, [hasHydrated, questions, syncQuestionLibrary]);
+  }, [hasHydrated, questions, syncQuestionLibrary, cleanupOrphanReviewData]);
 
   return (
     <AppShell>

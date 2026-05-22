@@ -6,6 +6,9 @@ import {
   createReviewPersistStorage,
   removePersistedReviewState,
 } from "../services/reviewPersistStorage";
+import { useBookStore } from "./useBookStore";
+import { invokeDesktop, isTauriRuntime } from "../services/desktopBridge";
+import { clearDesktopAssetCache } from "../hooks/useAssetUrl";
 import type { Question } from "../types/question";
 import type {
   DailyReviewSession,
@@ -431,3 +434,102 @@ function getLocalDateKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+// Re-read review data from correct book-scoped storage when active book changes
+const reviewStorage = createReviewPersistStorage();
+let previousBookId: string | null = null;
+let needsInitialLoad = true;
+
+async function loadReviewForCurrentBook() {
+  let stored: string | null = null;
+  const result = reviewStorage.getItem(REVIEW_STORAGE_KEY);
+  if (result && typeof result !== "string" && "then" in result) {
+    stored = await (result as Promise<string | null>);
+  } else {
+    stored = result as string | null;
+  }
+
+  if (!hasRealReviewData(stored)) {
+    const legacy = await tryMigrateLegacyReviewState();
+    if (legacy) {
+      reviewStorage.setItem(REVIEW_STORAGE_KEY, legacy);
+      stored = legacy;
+    }
+  }
+
+  applyStoredReviewState(stored);
+}
+
+function hasRealReviewData(stored: string | null): boolean {
+  if (!stored) return false;
+  try {
+    const parsed = JSON.parse(stored);
+    const inner = parsed.state ?? parsed;
+    return Array.isArray(inner.reviewLogs) && inner.reviewLogs.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function tryMigrateLegacyReviewState(): Promise<string | null> {
+  try {
+    if (isTauriRuntime()) {
+      return await invokeDesktop<string | null>("review_store_get", {
+        key: REVIEW_STORAGE_KEY,
+        bookId: null,
+      });
+    }
+    return localStorage.getItem(REVIEW_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function applyStoredReviewState(stored: string | null | undefined) {
+  const { settings } = useReviewStore.getState();
+  const emptyState = {
+    cards: {},
+    reviewLogs: [],
+    mistakeRecords: {},
+    questionFingerprints: {},
+    lastSyncResult: null,
+    dailyReviewSession: null,
+    settings,
+  };
+
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      // Zustand-persist wraps state as { state: {...}, version: N }
+      const inner = parsed.state ?? parsed;
+      useReviewStore.setState({ ...emptyState, ...inner });
+    } catch {
+      useReviewStore.setState(emptyState);
+    }
+  } else {
+    useReviewStore.setState(emptyState);
+  }
+}
+
+useBookStore.subscribe((state) => {
+  const newBookId = state.activeBookId;
+  if (newBookId === previousBookId) return;
+  previousBookId = newBookId;
+
+  if (!useReviewStore.getState().hasHydrated) {
+    needsInitialLoad = true;
+    return;
+  }
+  needsInitialLoad = false;
+  clearDesktopAssetCache();
+  void loadReviewForCurrentBook();
+});
+
+// When review store finishes hydrating after a skipped initial load, catch up
+useReviewStore.subscribe((state) => {
+  if (state.hasHydrated && needsInitialLoad) {
+    needsInitialLoad = false;
+    clearDesktopAssetCache();
+    void loadReviewForCurrentBook();
+  }
+});

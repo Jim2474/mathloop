@@ -46,6 +46,9 @@ fn bootstrap_mathloop_data<R: Runtime>(
     let top_dir = mathloop_data_dir()?;
     fs::create_dir_all(&top_dir).map_err(to_string)?;
 
+    // Auto-register bundled books from resources
+    register_bundled_books(&app, &top_dir)?;
+
     let book_id = book_id.unwrap_or_else(|| "default".to_string());
 
     // If book_id is "default" and books/default doesn't exist yet, run legacy path
@@ -257,9 +260,10 @@ fn update_question_tips(
 fn load_asset_data_url<R: Runtime>(
     app: tauri::AppHandle<R>,
     relative_path: String,
+    book_id: Option<String>,
 ) -> Result<String, String> {
     let normalized = normalize_relative_asset_path(&relative_path)?;
-    let bytes = read_external_or_resource_bytes(&app, &normalized)?;
+    let bytes = read_external_or_resource_bytes(&app, &normalized, book_id.as_deref())?;
     let mime = mime_from_path(&normalized);
     Ok(format!(
         "data:{};base64,{}",
@@ -509,25 +513,50 @@ fn read_external_or_resource_file<R: Runtime>(
 fn read_external_or_resource_bytes<R: Runtime>(
     app: &tauri::AppHandle<R>,
     relative_path: &str,
+    book_id: Option<&str>,
 ) -> Result<Vec<u8>, String> {
+    // 1. Book-scoped external dir: APPDATA/MathLoop/books/{bookId}/{path}
+    if let Some(bid) = book_id {
+        let book_external = mathloop_data_dir()?.join("books").join(bid).join(relative_path);
+        if book_external.exists() {
+            return fs::read(book_external).map_err(to_string);
+        }
+    }
+
+    // 2. Top-level external dir: APPDATA/MathLoop/{path} (legacy)
     let external = mathloop_data_dir()?.join(relative_path);
     if external.exists() {
         return fs::read(external).map_err(to_string);
     }
 
+    // 3. Resource dir: book-scoped first, then flat
     if let Ok(resource_dir) = app.path().resource_dir() {
+        if let Some(bid) = book_id {
+            let book_resource = resource_dir.join("books").join(bid).join(relative_path);
+            if book_resource.exists() {
+                return fs::read(book_resource).map_err(to_string);
+            }
+        }
         let resource = resource_dir.join(relative_path);
         if resource.exists() {
             return fs::read(resource).map_err(to_string);
         }
     }
 
+    // 4. Dev fallback: project_root/public/books/{bookId}/{path}
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let public_file = manifest_dir
+    let public_base = manifest_dir
         .parent()
         .unwrap_or(&manifest_dir)
-        .join("public")
-        .join(relative_path);
+        .join("public");
+
+    if let Some(bid) = book_id {
+        let book_public = public_base.join("books").join(bid).join(relative_path);
+        if book_public.exists() {
+            return fs::read(book_public).map_err(to_string);
+        }
+    }
+    let public_file = public_base.join(relative_path);
     fs::read(public_file).map_err(to_string)
 }
 
@@ -643,19 +672,11 @@ fn write_registry(connection: &Connection, entries: &[BookEntry]) -> Result<(), 
 
 fn run_migration<R: Runtime>(_app: &tauri::AppHandle<R>) -> Result<(), String> {
     let top_dir = mathloop_data_dir()?;
-    let default_book_dir = top_dir.join("books").join("default");
-
-    // Idempotency: skip if already migrated
-    if default_book_dir.exists() {
-        return Ok(());
-    }
-
     let db_path = top_dir.join(DB_FILE);
     ensure_database(&db_path)?;
     let connection = Connection::open(&db_path).map_err(to_string)?;
 
-    // Check migration version
-    let migrated: Option<String> = connection
+    let version: Option<String> = connection
         .query_row(
             "SELECT value FROM review_store WHERE key = ?1",
             params![MIGRATION_VERSION_KEY],
@@ -663,9 +684,104 @@ fn run_migration<R: Runtime>(_app: &tauri::AppHandle<R>) -> Result<(), String> {
         )
         .optional()
         .map_err(to_string)?;
-    if migrated.is_some() {
-        return Ok(());
+
+    match version.as_deref() {
+        None => run_migration_v1(&connection, &top_dir)?,
+        Some("1") => run_migration_v2(&connection, &top_dir)?,
+        _ => {}
     }
+
+    Ok(())
+}
+
+fn run_migration_v2(connection: &Connection, top_dir: &Path) -> Result<(), String> {
+    connection.execute_batch("BEGIN;").map_err(to_string)?;
+
+    let result = (|| -> Result<(), String> {
+        // Copy review::default → review::book001 (preserve user's review data)
+        let default_review: Option<String> = connection
+            .query_row(
+                "SELECT value FROM review_store WHERE key = ?1",
+                params![format!("{}{}", NEW_REVIEW_KEY_PREFIX, "default")],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(to_string)?;
+
+        if let Some(value) = default_review {
+            connection
+                .execute(
+                    "INSERT OR REPLACE INTO review_store (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)",
+                    params![
+                        format!("{}{}", NEW_REVIEW_KEY_PREFIX, "book001"),
+                        value,
+                        Local::now().to_rfc3339()
+                    ],
+                )
+                .map_err(to_string)?;
+        }
+
+        // Move books/default → books/book001
+        let default_dir = top_dir.join("books").join("default");
+        let book001_dir = top_dir.join("books").join("book001");
+        if default_dir.exists() {
+            for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+                let source = default_dir.join(sub);
+                if !source.exists() {
+                    continue;
+                }
+                let target = book001_dir.join(sub);
+                fs::create_dir_all(&target).map_err(to_string)?;
+                for entry in fs::read_dir(&source).map_err(to_string)? {
+                    let entry = entry.map_err(to_string)?;
+                    let src = entry.path();
+                    let dst = target.join(entry.file_name());
+                    if !dst.exists() {
+                        let _ = fs::copy(&src, &dst);
+                    }
+                }
+            }
+            let _ = fs::remove_dir_all(&default_dir);
+        }
+
+        // Update registry: remove "default", ensure book001
+        let existing = read_registry_raw(connection)?;
+        let mut registry: Vec<BookEntry> = existing
+            .into_iter()
+            .filter(|e| e.id != "default")
+            .collect();
+        if !registry.iter().any(|e| e.id == "book001") {
+            registry.push(BookEntry {
+                id: "book001".to_string(),
+                name: "高等数学基础篇·严选题".to_string(),
+                added_at: Local::now().to_rfc3339(),
+            });
+        }
+        write_registry(connection, &registry)?;
+
+        // Bump version
+        connection
+            .execute(
+                "INSERT OR REPLACE INTO review_store (key, value, updated_at)
+                 VALUES (?1, ?2, ?3)",
+                params![MIGRATION_VERSION_KEY, "2", Local::now().to_rfc3339()],
+            )
+            .map_err(to_string)?;
+
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = connection.execute_batch("ROLLBACK;");
+        return result;
+    }
+    connection.execute_batch("COMMIT;").map_err(to_string)?;
+    Ok(())
+}
+
+fn run_migration_v1(connection: &Connection, top_dir: &Path) -> Result<(), String> {
+    let default_book_dir = top_dir.join("books").join("default");
 
     // Step 1: Pre-migration backup
     let review_state: Option<String> = connection
@@ -767,6 +883,74 @@ fn run_migration<R: Runtime>(_app: &tauri::AppHandle<R>) -> Result<(), String> {
         added_at: Local::now().to_rfc3339(),
     }];
     write_registry(&connection, &registry)?;
+
+    Ok(())
+}
+
+fn register_bundled_books<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    top_dir: &Path,
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct BundledBook {
+        id: String,
+        name: String,
+    }
+
+    // Read books.json from resources
+    let books_json = match read_external_or_resource_file(app, "books.json") {
+        Ok(json) => json,
+        Err(_) => return Ok(()), // No bundled books — skip
+    };
+
+    let bundled: Vec<BundledBook> = match serde_json::from_str(&books_json) {
+        Ok(b) => b,
+        Err(_) => return Ok(()),
+    };
+
+    if bundled.is_empty() {
+        return Ok(());
+    }
+
+    let db_path = top_dir.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(&db_path).map_err(to_string)?;
+
+    let existing = read_registry_raw(&connection)?;
+    let existing_ids: std::collections::HashSet<String> =
+        existing.iter().map(|e| e.id.clone()).collect();
+
+    let mut registry = existing;
+    let mut changed = false;
+
+    for book in &bundled {
+        if existing_ids.contains(&book.id) {
+            continue;
+        }
+
+        // Create book directory and copy resources
+        let book_dir = top_dir.join("books").join(&book.id);
+        for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+            fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
+        }
+
+        let resource_prefix = format!("books/{}", book.id);
+        for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
+            let source_name = format!("{}/{}", resource_prefix, sub);
+            let _ = copy_missing_resource_dir(app, &source_name, &book_dir.join(sub));
+        }
+
+        registry.push(BookEntry {
+            id: book.id.clone(),
+            name: book.name.clone(),
+            added_at: Local::now().to_rfc3339(),
+        });
+        changed = true;
+    }
+
+    if changed {
+        write_registry(&connection, &registry)?;
+    }
 
     Ok(())
 }

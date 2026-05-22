@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { isTauriRuntime, loadDesktopAssetDataUrl } from "../services/desktopBridge";
+import { getActiveBookId } from "../utils/bookId";
 
 type AssetUrlState = {
   status: "idle" | "loading" | "loaded" | "error";
@@ -7,6 +8,10 @@ type AssetUrlState = {
 };
 
 const desktopAssetCache = new Map<string, string>();
+
+export function clearDesktopAssetCache(): void {
+  desktopAssetCache.clear();
+}
 
 export function useAssetUrl(path: string | undefined): AssetUrlState {
   const normalizedPath = normalizeAssetPath(path);
@@ -41,7 +46,8 @@ export function useAssetUrl(path: string | undefined): AssetUrlState {
 
     async function loadDesktopAsset() {
       try {
-        const url = await loadDesktopAssetDataUrl(normalizedPath);
+        const bookId = getActiveBookId();
+        const url = await loadDesktopAssetDataUrl(normalizedPath, bookId ?? undefined);
         desktopAssetCache.set(normalizedPath, url);
         if (!cancelled) {
           setState({ status: "loaded", url });
@@ -79,5 +85,10 @@ function normalizeAssetPath(path: string | undefined): string {
 }
 
 function toBrowserAssetUrl(path: string): string {
-  return path.startsWith("/") ? path : `/${path}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const bookId = getActiveBookId();
+  if (bookId && !cleanPath.startsWith(`/books/`)) {
+    return `/books/${bookId}${cleanPath}`;
+  }
+  return cleanPath;
 }

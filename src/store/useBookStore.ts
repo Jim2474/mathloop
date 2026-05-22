@@ -12,6 +12,8 @@ import {
 } from "../services/desktopBridge";
 
 const ACTIVE_BOOK_KEY = "mathloop-active-book";
+const BOOKS_MANIFEST_URL = "/books.json";
+const DEFAULT_BOOK_ID = "book001";
 
 type BookState = {
   books: BookEntry[];
@@ -34,7 +36,25 @@ export const useBookStore = create<BookState>()(
 
       loadBooks: async () => {
         if (!isTauriRuntime()) {
-          set({ isLoaded: true });
+          try {
+            const response = await fetch(BOOKS_MANIFEST_URL, { cache: "no-cache" });
+            if (response.ok) {
+              const data: unknown = await response.json();
+              if (Array.isArray(data)) {
+                const books = data as BookEntry[];
+                set({ books, isLoaded: true });
+                // Auto-select default book if none is active
+                if (!get().activeBookId && books.length > 0) {
+                  const defaultBook = books.find((b) => b.id === DEFAULT_BOOK_ID) ?? books[0];
+                  set({ activeBookId: defaultBook.id });
+                }
+                return;
+              }
+            }
+          } catch {
+            // Fall through to empty state
+          }
+          set({ books: [], isLoaded: true });
           return;
         }
         try {
@@ -51,9 +71,11 @@ export const useBookStore = create<BookState>()(
 
         set({ isSwitching: true });
         try {
-          resetDesktopRuntime();
-          await setActiveDesktopBook(bookId);
-          await initializeDesktopRuntime(bookId);
+          if (isTauriRuntime()) {
+            resetDesktopRuntime();
+            await setActiveDesktopBook(bookId);
+            await initializeDesktopRuntime(bookId);
+          }
           set({ activeBookId: bookId, isSwitching: false });
         } catch (error) {
           set({ isSwitching: false });
@@ -62,12 +84,18 @@ export const useBookStore = create<BookState>()(
       },
 
       addBook: async (bookId: string, name: string) => {
+        if (!isTauriRuntime()) {
+          throw new Error("浏览器模式暂不支持添加书本。");
+        }
         const entry = await addDesktopBook(bookId, name);
         set((state) => ({ books: [...state.books, entry] }));
         return entry;
       },
 
       removeBook: async (bookId: string) => {
+        if (!isTauriRuntime()) {
+          throw new Error("浏览器模式暂不支持移除书本。");
+        }
         await removeDesktopBook(bookId);
         set((state) => ({
           books: state.books.filter((b) => b.id !== bookId),

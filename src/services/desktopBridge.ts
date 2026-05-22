@@ -9,6 +9,7 @@ export type BootstrapInfo = {
 };
 
 let bootstrapPromise: Promise<BootstrapInfo | null> | null = null;
+let lastBootstrappedBookId: string | undefined;
 let desktopDataDir = "";
 
 export function isTauriRuntime(): boolean {
@@ -19,7 +20,11 @@ export async function initializeDesktopRuntime(bookId?: string): Promise<Bootstr
   if (!isTauriRuntime()) {
     return null;
   }
-  bootstrapPromise ??= invoke<BootstrapInfo>("bootstrap_mathloop_data", { bookId: bookId ?? null }).then((info) => {
+  if (bootstrapPromise && bookId === lastBootstrappedBookId) {
+    return bootstrapPromise;
+  }
+  lastBootstrappedBookId = bookId;
+  bootstrapPromise = invoke<BootstrapInfo>("bootstrap_mathloop_data", { bookId: bookId ?? null }).then((info) => {
     desktopDataDir = info.dataDir;
     return info;
   });
@@ -44,12 +49,12 @@ export function toDesktopAssetUrl(path: string): string {
   return convertFileSrc(`${desktopDataDir}${separator}${relativePath}`);
 }
 
-export async function loadDesktopAssetDataUrl(path: string): Promise<string> {
+export async function loadDesktopAssetDataUrl(path: string, bookId?: string): Promise<string> {
   if (!isTauriRuntime()) {
     return "";
   }
-  await initializeDesktopRuntime();
-  return invokeDesktop<string>("load_asset_data_url", { relativePath: path });
+  await initializeDesktopRuntime(bookId);
+  return invokeDesktop<string>("load_asset_data_url", { relativePath: path, bookId: bookId ?? null });
 }
 
 export async function updateDesktopQuestionTips(

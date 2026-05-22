@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { updateDesktopQuestionTips } from "../services/desktopBridge";
 import { loadOpenClawQuestions } from "../services/questionLoader";
 import type { Question, UncertainFilter } from "../types/question";
+import { getActiveBookId } from "../utils/bookId";
 
 type PersistedQuestionState = {
   selectedChapter: string;
@@ -49,7 +50,7 @@ export const useQuestionStore = create<QuestionState>()(
         }
       },
       saveQuestionTips: async (questionId, tips) => {
-        const bookId = getActiveBookIdFromStorage();
+        const bookId = getActiveBookId();
         await updateDesktopQuestionTips(questionId, tips, bookId ?? undefined);
         const questions = await loadOpenClawQuestions();
         set({ questions, error: null });
@@ -73,13 +74,3 @@ export const useQuestionStore = create<QuestionState>()(
   ),
 );
 
-function getActiveBookIdFromStorage(): string | null {
-  try {
-    const raw = localStorage.getItem("mathloop-active-book");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.activeBookId ?? null;
-  } catch {
-    return null;
-  }
-}

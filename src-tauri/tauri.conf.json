@@ -36,11 +36,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../public/data",
-      "../public/questions",
-      "../public/answers",
-      "../public/pages",
-      "../public/question-fixes"
+      "../public/books",
+      "../public/books.json"
     ],
     "windows": {
       "wix": {
