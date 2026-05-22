@@ -1,15 +1,30 @@
 # Multi-Book Support Design Spec
 
+**Status:** Completed (2026-05-22)
+**Last Updated:** 2026-05-22
+
 ## Overview
 
 Add support for multiple exercise books in MathLoop. Each book has its own questions.json and isolated review data (cards, logs, mistakes). Shared settings across all books. Switch books via navbar dropdown.
 
+## Implementation Summary
+
+All planned features were implemented with the following notable deviations from the original design:
+
+1. **Book ID naming**: Migration v2 renamed `default` to `book001` for consistency. The book registry now uses `book001` (高等数学基础篇·严选题) and `book002` (武忠祥高等数学辅导讲义·严选题).
+2. **Auto-registration**: Bundled books are auto-registered from `public/books.json` on first bootstrap via `register_bundled_books()`, eliminating the need for manual directory detection.
+3. **Asset resolution**: `load_asset_data_url` uses a 5-tier fallback: book-scoped external -> top-level external -> book-scoped resource -> flat resource -> dev public/books/.
+4. **Web mode**: Full web-mode support via `/books/{bookId}/data/questions.json` URL routing and localStorage scoped keys (`{name}::{bookId}`).
+5. **Two-phase migration**: v1 creates `books/default/`, v2 renames to `books/book001/` and copies `review::default` to `review::book001`.
+6. **Review rehydration**: Manual `loadReviewForCurrentBook()` with Zustand book store subscription instead of relying on automatic Zustand persist re-hydration.
+7. **Settings**: Settings remain book-scoped (part of each book's review state) rather than globally shared, though the Rust backend special-cases the `settings` key for future use.
+
 ## Goals
 
-- Import and switch between 3-5 exercise books
+- Import and switch between multiple exercise books
 - Each book's review data (cards, reviewLogs, mistakeRecords, fingerprints) is fully isolated
-- Existing data is preserved during migration — zero data loss
-- Shared review settings (maxDailyReviews, maxNewPerDay, desiredRetention)
+- Existing data is preserved during migration -- zero data loss
+- Shared review settings (maxDailyReviews, maxNewPerDay, desiredRetention) [Implementation note: currently book-scoped]
 - Manual file placement: user copies questions.json into a book directory
 
 ## Non-Goals
@@ -25,310 +40,170 @@ Add support for multiple exercise books in MathLoop. Each book has its own quest
 ```
 %APPDATA%\MathLoop\
 ├── books\
-│   ├── default\                    ← migrated from current data
+│   ├── book001\                     ← 高等数学基础篇·严选题 (256 questions)
 │   │   ├── data\questions.json
 │   │   ├── questions\              ← question images
 │   │   ├── answers\                ← answer images
 │   │   ├── pages\                  ← page images
 │   │   └── question-fixes\         ← image fixes
-│   ├── wuzhongxiang-yanxuanti\     ← new book example
+│   ├── book002\                     ← 武忠祥高等数学辅导讲义·严选题 (238 questions)
 │   │   └── data\questions.json
 │   └── ...
 ├── mathloop.db                     ← shared SQLite
 ├── backups\                        ← shared backup directory
 │   ├── pre-migration-{ts}.json     ← auto-created before migration
 │   └── mathloop-auto-{ts}.json     ← startup backups
-└── (no settings.json — settings in SQLite)
 ```
 
 ### bookId Rules
 
-- Directory name = bookId
+- Directory name = bookId (e.g., `book001`, `book002`)
 - Allowed characters: `[a-z0-9-]`
-- `default` is reserved for migrated existing data
 - Max length: 64 characters
+- `default` was used as a temporary ID during migration v1, replaced by `book001` in v2
 
 ---
 
 ## 2. SQLite Key Naming
 
-| Purpose | Current Key | New Key |
-|---------|------------|---------|
-| Review state | `openclaw-review-state` | `review::{bookId}` |
-| Shared settings | (inside review state) | `settings` (standalone) |
-| Book registry | (none) | `book-registry` |
-| Migration version | (none) | `migration-version` |
+| Purpose | Key | Notes |
+|---------|-----|-------|
+| Review state (desktop) | `review::{bookId}` | e.g., `review::book001` |
+| Review state (web) | `openclaw-review-state::{bookId}` | localStorage scoped key |
+| Book registry | `book-registry` | JSON array of BookEntry |
+| Migration version | `migration-version` | Currently "2" |
 
 ### book-registry Format (stored as JSON string in SQLite)
 
 ```json
 [
-  { "id": "default", "name": "高等数学基础篇·严选题", "addedAt": "2026-05-18T08:00:00+08:00" },
-  { "id": "wuzhongxiang-yanxuanti", "name": "武忠祥高等数学辅导讲义·严选题", "addedAt": "2026-05-18T10:00:00+08:00" }
+  { "id": "book001", "name": "高等数学基础篇·严选题", "addedAt": "2026-05-18T08:00:00+08:00" },
+  { "id": "book002", "name": "武忠祥高等数学辅导讲义·严选题", "addedAt": "2026-05-18T10:00:00+08:00" }
 ]
 ```
 
-### Settings Key (shared, no bookId prefix)
+---
 
-```json
-{
-  "maxDailyReviews": 20,
-  "maxNewPerDay": 10,
-  "desiredRetention": 0.9
-}
-```
+## 3. Rust Backend (Implemented)
+
+### Tauri Commands
+
+All commands from the design spec were implemented:
+
+- `list_books` - Returns book registry entries from SQLite
+- `add_book(book_id, name)` - Validates, creates directories, adds to registry
+- `remove_book(book_id)` - Removes from registry only (not files)
+- `set_active_book(book_id)` - Validates book exists and has questions.json
+- `bootstrap_mathloop_data(book_id)` - Accepts optional book_id, runs migration first, auto-registers bundled books
+- `review_store_get/set/remove(key, book_id)` - Book-scoped storage with `review::{bookId}` key prefix
+- `load_questions_json(book_id)` - Reads from book's data directory, resource fallback
+- `load_question_image_fixes_json(book_id)` - Reads from book's data directory
+- `update_question_tips(book_id, question_id, tips)` - Writes tips to book-scoped questions.json
+- `load_asset_data_url(relative_path, book_id)` - 5-tier asset resolution
+
+### Additional: `register_bundled_books`
+
+Reads `public/books.json` from bundled resources and auto-registers any books not already in the registry, creating directories and copying bundled assets.
+
+### Additional: Migration v2
+
+Renames `books/default/` to `books/book001/`, copies `review::default` SQLite row to `review::book001`, updates registry replacing "default" with "book001", bumps migration version to "2".
 
 ---
 
-## 3. Rust Backend Changes
+## 4. Data Migration (Implemented)
 
-### New Tauri Commands
+### Two-Phase Migration
 
-#### `list_books`
+**Migration v1** (when `migration-version` key is absent):
+1. Pre-migration backup of `openclaw-review-state`
+2. Create `books/default/` directories
+3. Move existing data (rename): `data/`, `questions/`, `answers/`, `pages/`, `question-fixes/` into `books/default/`
+4. Copy `openclaw-review-state` to `review::default`
+5. Write migration version "1"
 
-- Read `book-registry` from SQLite
-- Return `Vec<BookEntry>` (id, name, addedAt)
-- If registry doesn't exist, return empty list
-
-#### `add_book(book_id: String, name: String)`
-
-- Validate bookId format (`[a-z0-9-]`, max 64 chars)
-- Create `books/{bookId}/data/` directory
-- Create `books/{bookId}/questions/`, `answers/`, `pages/`, `question-fixes/` directories
-- Add entry to book-registry
-- Return `BookEntry`
-
-#### `remove_book(book_id: String)`
-
-- Remove from book-registry only (do NOT delete files)
-- Return success
-
-#### `set_active_book(book_id: String)`
-
-- Validate bookId exists in registry and `books/{bookId}/data/questions.json` exists
-- Run `bootstrap_mathloop_data` logic for that book
-- Return `BootstrapInfo`
-
-### Modified Commands
-
-#### `bootstrap_mathloop_data(book_id: String)`
-
-- Accept `book_id` parameter
-- Data directory: `mathloop_data_dir()/books/{book_id}/`
-- Copy missing resources into book-specific subdirectories
-- Backup and DB remain shared (top-level)
-
-#### `review_store_get(key: String, book_id: String)`
-
-- If key is `settings`, use as-is (global)
-- Otherwise, use `{key}::{book_id}` as actual SQLite key
-
-#### `review_store_set(key: String, value: String, book_id: String)`
-
-- Same prefix logic as `review_store_get`
-
-#### `review_store_remove(key: String, book_id: String)`
-
-- Same prefix logic
-
-#### `load_questions_json(book_id: String)`
-
-- Read from `books/{bookId}/data/questions.json` (external first, then resource fallback)
-
-#### `update_question_tips(book_id: String, question_id: String, tips: String)`
-
-- Operate on `books/{bookId}/data/questions.json`
-
-#### `load_question_image_fixes_json(book_id: String)`
-
-- Read from `books/{bookId}/data/question-image-fixes.json`
-
-### New helper: `resolve_book_dir(book_id) -> PathBuf`
-
-```rust
-fn resolve_book_dir(book_id: &str) -> Result<PathBuf, String> {
-    let dir = mathloop_data_dir()?.join("books").join(book_id);
-    if !dir.exists() {
-        return Err(format!("书本目录不存在: {}", book_id));
-    }
-    Ok(dir)
-}
-```
-
----
-
-## 4. Data Migration (First Launch)
-
-### Trigger
-
-On startup, check if `mathloop_data_dir()/books/default/` exists. If not, run migration.
-
-### Steps
-
-1. **Pre-migration backup**
-   - Read current review state from SQLite key `openclaw-review-state`
-   - Write to `backups/pre-migration-{timestamp}.json`
-   - This is a full JSON export, human-readable
-
-2. **Create book directories**
-   - `mkdir -p books/default/data`
-   - `mkdir -p books/default/questions`
-   - `mkdir -p books/default/answers`
-   - `mkdir -p books/default/pages`
-   - `mkdir -p books/default/question-fixes`
-
-3. **Move existing data** (rename, not copy)
-   - `data/` → `books/default/data/`
-   - `questions/` → `books/default/questions/`
-   - `answers/` → `books/default/answers/`
-   - `pages/` → `books/default/pages/`
-   - `question-fixes/` → `books/default/question-fixes/`
-
-4. **Migrate SQLite keys** (in a transaction)
-   ```sql
-   BEGIN;
-   INSERT INTO review_store (key, value, updated_at)
-     SELECT 'review::default', value, updated_at
-     FROM review_store WHERE key = 'openclaw-review-state';
-   DELETE FROM review_store WHERE key = 'openclaw-review-state';
-   INSERT OR REPLACE INTO review_store (key, value, updated_at)
-     VALUES ('migration-version', '1', datetime('now'));
-   COMMIT;
-   ```
-
-5. **Write book registry**
-   - Insert `book-registry` key with `[{id:"default", name:"现有题库", addedAt:...}]`
-
-6. **Extract shared settings**
-   - Parse review state JSON, extract `settings` field
-   - Write to standalone `settings` key
+**Migration v2** (when `migration-version` is "1"):
+1. Copy `review::default` to `review::book001`
+2. Move `books/default/` contents to `books/book001/`, remove `books/default/`
+3. Update registry: remove "default", add "book001" with proper name
+4. Bump migration version to "2"
 
 ### Rollback
 
-If any step fails:
-- SQLite: transaction auto-rolls back
-- Files: rename operations are atomic on same partition
-- User can manually restore from `backups/pre-migration-*.json`
-
-### Idempotency
-
-- If `books/default/` already exists, skip migration
-- If `migration-version` key exists, skip migration
-- If `openclaw-review-state` key doesn't exist, skip step 4
+- SQLite: transaction auto-rolls back on failure
+- Files: backup created before any file moves
+- Manual restore from `backups/pre-migration-*.json`
 
 ---
 
-## 5. Frontend State
+## 5. Frontend State (Implemented)
 
-### New Store: `useBookStore`
+### `useBookStore`
 
-```ts
-type BookEntry = {
-  id: string;
-  name: string;
-  addedAt: string;
-};
+- Manages book list, active book, switch state, loading state
+- Persists `activeBookId` to localStorage key `mathloop-active-book`
+- Web mode: loads from `/books.json` manifest, auto-selects default book
+- Desktop mode: loads from Tauri `list_books` command
+- `switchBook()`: resets desktop runtime, sets active book, re-initializes
 
-type BookState = {
-  books: BookEntry[];
-  activeBookId: string | null;
-  isSwitching: boolean;
+### `useQuestionStore`
 
-  loadBooks: () => Promise<void>;
-  switchBook: (bookId: string) => Promise<void>;
-};
-```
+- `loadQuestions()` calls `loadOpenClawQuestions()` with active bookId
+- `saveQuestionTips()` passes bookId to `updateDesktopQuestionTips`
+- Uses `getActiveBookId()` from `src/utils/bookId.ts`
 
-- Persist `activeBookId` to localStorage key `mathloop-active-book`
-- On startup: load book list, restore activeBookId, bootstrap that book
+### `useReviewStore`
 
-### Modified Stores
-
-#### `useQuestionStore`
-
-- `loadQuestions()` calls `load_questions_json` with current `activeBookId`
-- No changes to filter/UI state persistence
-
-#### `useReviewStore`
-
-- `createReviewPersistStorage()` passes `bookId` to all invoke calls
-- Zustand `persist` automatically re-hydrates when storage key changes
-- On book switch: store is re-created with new bookId-scoped key
+- `createReviewPersistStorage()` reads active bookId dynamically from Zustand state
+- Web: scoped localStorage keys using `{name}::{bookId}` format
+- Desktop: sends key + bookId to Rust, which applies `review::{bookId}` prefix
+- `subscribe()` on book store detects book changes, calls `loadReviewForCurrentBook()`
+- Legacy migration: if no book-scoped review data, reads from unscoped key
 
 ### Book Switch Flow
 
 ```
 User clicks book name in dropdown
-  → bookStore.switchBook(bookId)
-  → setActiveBookId(bookId) + save to localStorage
-  → invoke("bootstrap_mathloop_data", { bookId })
-  → questionStore.loadQuestions()  // re-fetches from new book
-  → reviewStore re-hydrates       // new key prefix
-  → UI updates automatically
+  -> bookStore.switchBook(bookId)
+  -> setActiveBookId(bookId) + save to localStorage
+  -> resetDesktopRuntime() + setActiveDesktopBook(bookId) + initializeDesktopRuntime(bookId)
+  -> questionStore.loadQuestions()
+  -> reviewStore subscription fires -> loadReviewForCurrentBook()
+  -> clearDesktopAssetCache()
+  -> UI updates automatically
 ```
 
 ---
 
-## 6. UI Changes
+## 6. UI Changes (Implemented)
 
 ### Navbar Dropdown
 
-Position: left side of navbar, before nav links.
+Book dropdown with checkmark for active book, "add book" button opening a dialog, identical to the planned design.
 
-```
-┌─────────────────────────────────────────────────┐
-│ [📘 现有题库 ▾]   Dashboard  错题录入  题库  复习  备份 │
-└─────────────────────────────────────────────────┘
-```
-
-Dropdown content:
-- List of registered books, current book highlighted with checkmark
-- Grayed-out entries for unregistered book directories (detected on disk)
-- Bottom: "+ 添加新书" button (opens confirmation dialog)
-- Clicking a book triggers `switchBook()`
-
-### Add Book Flow (Manual File Placement)
-
-1. User creates directory: `%APPDATA%\MathLoop\books\{bookId}\data\`
-2. User places `questions.json` in that directory
-3. User places images in `questions/`, `answers/`, `pages/` subdirectories
-4. App detects new directory on next `listBooks()` call
-5. Shows as "未注册" in dropdown
-6. User clicks → dialog asks for display name → registers → switches
-
-### Dashboard
-
-- Show current book name in hero section subtitle
-- All stats scoped to current book's questions
-
-### Backup Page
+### Dashboard and Backup Pages
 
 - Show current book name
-- Export includes `bookId` field
-- Import warns if `bookId` doesn't match current book
+- Backup export includes `bookId` field
+- Import warns if bookId mismatch
 
 ---
 
-## 7. Backup Format Extension
+## 7. Asset Handling
 
-```json
-{
-  "version": 1,
-  "bookId": "default",
-  "exportedAt": "2026-05-18T...",
-  "cards": {},
-  "reviewLogs": [],
-  "settings": {},
-  "mistakeRecords": {},
-  "questionFingerprints": {},
-  "lastSyncResult": null,
-  "dailyReviewSession": null
-}
-```
+### Asset URL Resolution (5-tier)
 
-- `bookId` is new optional field
-- Backward compatible: old backups without `bookId` are still valid
-- Import: if `bookId` present and doesn't match current book, show warning dialog
+1. **Book-scoped external**: `%APPDATA%\MathLoop\books\{bookId}\{path}`
+2. **Top-level external**: `%APPDATA%\MathLoop\{path}` (legacy)
+3. **Book-scoped resource**: bundled `books/{bookId}/{path}`
+4. **Flat resource**: bundled `{path}`
+5. **Dev fallback**: `project_root/public/books/{bookId}/{path}`
+
+### Frontend Asset Resolution (`useAssetUrl`)
+
+- Browser mode: URLs prefixed with `/books/{bookId}/` for correct MIME type serving
+- Desktop mode: base64 data URLs via `load_asset_data_url` with `bookId` param
+- Cache: in-memory `Map<string, string>` for desktop assets, cleared on book switch
 
 ---
 
@@ -341,14 +216,22 @@ Dropdown content:
 | Migration fails mid-way | Rollback SQLite transaction, show error with backup path |
 | bookId format invalid | Reject with validation error |
 | Duplicate bookId | Reject with "书本已存在" |
-| Book switch during review | Complete current review card, then switch |
+| Book switch during review | Complete current review card, review data reloads for new book |
 
 ---
 
-## 9. Testing Strategy
+## 9. Web Mode Support (Additional)
 
-- **Migration**: Test with existing data directory, verify all files moved, SQLite keys renamed, backup created
-- **Book isolation**: Add two books, review questions in each, verify no cross-contamination
-- **Settings sharing**: Change settings in book A, verify book B uses same settings
-- **Edge cases**: Empty book directory, missing questions.json, corrupted registry
-- **Backup/restore**: Export from book A, import to book B (should warn)
+The implementation added web-mode support not in the original design:
+
+- `/books.json` manifest for book discovery
+- `/books/{bookId}/data/questions.json` for question loading
+- `/books/{bookId}/questions/`, `/answers/`, `/pages/` for static assets
+- localStorage scoping with `{key}::{bookId}` pattern
+- Auto-selection of default book (`book001`) or first available
+
+## 10. Bundled Resources
+
+`tauri.conf.json` bundles:
+- `../public/books/` -- all book directories with questions and images
+- `../public/books.json` -- book manifest used for auto-registration
