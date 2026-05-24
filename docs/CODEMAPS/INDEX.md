@@ -1,6 +1,6 @@
 # MathLoop Codebase Codemaps
 
-**Last Updated:** 2026-05-22
+**Last Updated:** 2026-05-24
 **Primary Entry Points:** `src/main.tsx`, `src-tauri/src/main.rs`
 
 ## Architecture Overview

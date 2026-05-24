@@ -1,6 +1,6 @@
 # Backend Codemap (Rust/Tauri)
 
-**Last Updated:** 2026-05-22
+**Last Updated:** 2026-05-24
 **Entry Point:** `src-tauri/src/main.rs` (single-file backend, ~960 lines)
 
 ## Architecture

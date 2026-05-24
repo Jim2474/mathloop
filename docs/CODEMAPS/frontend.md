@@ -1,6 +1,6 @@
 # Frontend Codemap
 
-**Last Updated:** 2026-05-22
+**Last Updated:** 2026-05-24
 **Entry Points:** `src/main.tsx`, `src/app/App.tsx`
 
 ## Architecture

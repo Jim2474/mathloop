@@ -1,6 +1,6 @@
 # Database Codemap
 
-**Last Updated:** 2026-05-22
+**Last Updated:** 2026-05-24
 **Database:** SQLite at `%APPDATA%/MathLoop/mathloop.db`
 
 ## Schema

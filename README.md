@@ -1,114 +1,127 @@
 # MathLoop
 
-Smart review for math mistakes. MathLoop is a fully local Tauri v2 + React app for managing math question banks, marking selected questions as mistakes, and reviewing them with FSRS scheduling. Supports multiple exercise books with independent review data.
+**错题智能复习，告别遗忘曲线。**
 
-## Current Status
+MathLoop 是一款完全本地化的数学错题管理应用，基于 [FSRS](https://github.com/open-spaced-repetition/fsrs4anki) 间隔重复算法（与 Anki 同源），帮助你在考研数学复习中高效巩固薄弱环节。支持桌面端（Tauri）和 Web 端，数据全部存储在本地，无需登录，无需联网。
 
-- App name: MathLoop
-- Version: 0.1.4
-- Runtime: Vite + React + TypeScript + Tauri v2 desktop shell
-- Review engine: `ts-fsrs`
-- Books: 2 supported (book001: 高等数学基础篇·严选题, book002: 武忠祥高等数学辅导讲义·严选题)
-- Web review state: browser `localStorage`, key `openclaw-review-state::{bookId}`
-- Desktop review state: SQLite at `%APPDATA%\MathLoop\mathloop.db`, key `review::{bookId}`
-- Backend: Rust/Tauri (single-file, ~960 lines)
-- Login/cloud sync: none
+## 功能特性
 
-## Feature Overview
+- **多书库管理** — 内置多本数学习题集，切换书目时复习数据相互独立
+- **错题录入** — 按页码 + 题号快速定位并标记错题
+- **FSRS 智能复习** — Again / Hard / Good / Easy 四级评分，算法自动安排下次复习时间
+- **每日复习会话** — 复习进度在页面切换间保持，不丢失状态
+- **解题思路笔记** — 为每道题保存个人解题思路（tips），随时回顾
+- **数据健康检查** — 检测孤立卡片、缺失图片等数据异常
+- **备份与恢复** — 一键导出 / 导入复习数据，支持跨设备迁移
+- **Apple 风格毛玻璃界面** — 简洁美观的仪表盘，直观展示学习统计
 
-- Multi-book support: switch between exercise books, each with independent review data.
-- Book registry: SQLite stores book list; auto-registration of bundled books.
-- Data migration: Legacy review data auto-migrates to book-scoped storage on first launch.
-- Dashboard with Apple-style glass UI and study metrics.
-- Question library loaded per-book from `books/{bookId}/data/questions.json`.
-- Question detail pages with image display via book-scoped asset resolution.
-- Mistake intake by page number and question number.
-- FSRS review flow for manually marked mistakes.
-- Persistent daily review sessions that survive page navigation.
-- Per-question `tips` (解题思路) saved back to book-scoped `questions.json`.
-- Backup/export/import for local review state (includes `bookId` field).
-- Data health checks for orphan cards, missing images, uncertain fields.
+## 内置书目
 
-## Supported Books
-
-| Book ID | Name | Questions | Chapters |
-|---------|------|-----------|----------|
+| 书目 ID | 名称 | 题目数 | 章节数 |
+|---------|------|--------|--------|
 | book001 | 高等数学基础篇·严选题 | 256 | 9 |
 | book002 | 武忠祥高等数学辅导讲义·严选题 | 238 | 6 |
 
-## Project Structure
+## 技术栈
 
-```text
+| 层级 | 技术 |
+|------|------|
+| 前端框架 | React 19 + TypeScript |
+| 构建工具 | Vite 7 |
+| 样式 | Tailwind CSS 3 |
+| 状态管理 | Zustand |
+| 路由 | React Router DOM v6 |
+| 桌面壳 | Tauri v2（Rust 后端） |
+| 复习引擎 | ts-fsrs（FSRS 算法） |
+| 桌面存储 | SQLite（`%APPDATA%\MathLoop\mathloop.db`） |
+| Web 存储 | localStorage |
+
+## 快速开始
+
+### 环境要求
+
+- Node.js >= 18
+- npm >= 9
+
+### Web 端开发
+
+```bash
+npm install
+npm run dev          # 启动开发服务器（localhost）
+npm run build        # 生产构建
+npm run preview      # 预览生产构建
+```
+
+### 桌面端开发
+
+额外要求：[Rust](https://rustup.rs/) + [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（含 Windows SDK）
+
+```bash
+npm run tauri:dev    # 启动桌面应用（开发模式）
+npm run tauri:build  # 构建 Windows 安装包
+```
+
+## 复习流程
+
+```
+错题录入 → 选择页码/题号 → 匹配题目 → 设定复习时间
+    ↓
+复习到期 → 打开复习页面 → 翻开答案 → 评分（Again/Hard/Good/Easy）
+    ↓
+FSRS 自动计算下次复习时间 → 循环巩固
+```
+
+只有手动标记的错题才会进入复习队列。每天的复习轮次在页面切换间保持，仅在明确继续或新一天开始时生成新轮次。
+
+## 项目结构
+
+```
 public/
-  logo.svg                   # MathLoop brand mark
-  apple-touch-icon.png
-  books.json                 # Book manifest (id -> name mapping)
+  books.json                 # 书目清单（id -> 名称映射）
   books/
-    book001/                 # Book 1 bundled assets
-      data/questions.json
-      questions/             # Question images
-      answers/               # Answer images
-      pages/                 # Full-page scans
-      question-fixes/        # Corrected images
-    book002/                 # Book 2 bundled assets
+    book001/                 # 书目 1 资源
+      data/questions.json    # 题目数据（数据源）
+      questions/             # 题目图片
+      answers/               # 答案图片
+      pages/                 # 整页扫描
+      question-fixes/        # 修正图片
+    book002/                 # 书目 2 资源
 src/
-  app/App.tsx                # App bootstrap: book loading, question loading, review sync
+  app/App.tsx                # 应用启动：书目加载、题目加载、复习同步
   components/
-    layout/                  # AppShell, Navbar (book dropdown)
-    common/                  # EmptyState
-    dashboard/               # StatCard
+    layout/                  # AppShell, Navbar（书目切换下拉）
+    dashboard/               # StatCard 统计卡片
     question/                # QuestionImage, QuestionThumbnail
-  pages/                     # Dashboard, MistakeEntry, QuestionList, QuestionDetail, Review, Backup
+  pages/                     # 6 个页面
+    Dashboard                # 仪表盘（学习统计）
+    MistakeEntry             # 错题录入
+    QuestionList             # 题目列表
+    QuestionDetail           # 题目详情
+    Review                   # 复习页面
+    Backup                   # 备份管理
   services/
-    backupService.ts         # Backup create/validate/download
-    dashboardStats.ts        # Review statistics
-    desktopBridge.ts         # Tauri IPC abstraction
-    fsrsService.ts           # FSRS scheduling (ts-fsrs)
-    librarySyncService.ts    # Question fingerprinting
-    mistakeLookup.ts         # Find by page/number
-    questionLoader.ts        # Load questions (book-aware)
-    reviewPersistStorage.ts  # Book-scoped storage adapter
-    reviewQueue.ts           # Daily review queue builder
+    fsrsService.ts           # FSRS 调度算法
+    reviewQueue.ts           # 每日复习队列
+    questionLoader.ts        # 题目加载（书目感知）
+    desktopBridge.ts         # Tauri IPC 抽象层
+    backupService.ts         # 备份创建/校验/下载
+    mistakeLookup.ts         # 按页码/题号查找
+    reviewPersistStorage.ts  # 书目隔离的存储适配器
   store/
-    useBookStore.ts          # Book list, active book, switch logic
-    useQuestionStore.ts      # Questions, filters, tips
-    useReviewStore.ts        # FSRS cards, logs, mistakes, sessions
-  hooks/useAssetUrl.ts       # Book-scoped asset URL resolution
-  types/                     # BookEntry, Question, Review types
-  utils/                     # bookId, date, filters, images, stats, labels
+    useBookStore.ts          # 书目列表、当前书目、切换逻辑
+    useQuestionStore.ts      # 题目、筛选、解题思路
+    useReviewStore.ts        # FSRS 卡片、日志、错题、会话
+  types/                     # TypeScript 类型定义
+  utils/                     # 日期、筛选、图片解析、统计工具
 src-tauri/
-  icons/                     # Windows app icons
-  src/main.rs                # Rust backend: commands, migration, asset loading
-docs/
-  CODEMAPS/                  # Code architecture maps (INDEX, frontend, backend, database, data-flow)
-  superpowers/               # Design specs and implementation plans
+  src/main.rs                # Rust 后端（~960 行）：命令、迁移、资源加载
 ```
 
-## Data Directory (Desktop)
+## 数据模型
 
-```
-%APPDATA%\MathLoop\
-├── mathloop.db                     # SQLite database
-├── books\
-│   ├── book001\                    # 高等数学基础篇·严选题
-│   │   ├── data\questions.json
-│   │   ├── questions\              # Question images
-│   │   ├── answers\                # Answer images
-│   │   ├── pages\                  # Page scans
-│   │   └── question-fixes\         # Corrected images
-│   └── book002\                    # 武忠祥高等数学辅导讲义·严选题
-│       └── data\questions.json
-└── backups\
-    ├── pre-migration-*.json        # Migration safety backups
-    ├── mathloop-auto-*.json        # Startup auto-backups (kept 30)
-    └── questions-before-tip-*.json # Tips update safety copies
-```
+`questions.json` 是题目内容和图片路径的唯一数据源。应用不会将 FSRS 数据或备份状态写入该文件（桌面端通过 save tips 功能写入 `tips` 字段除外）。
 
-## Data Model
-
-`questions.json` is the source of truth for question content and image paths. The app does not write FSRS data or backup state into `questions.json` (except for the `tips` field via the desktop app's save feature).
-
-Question image paths use public-relative or book-scoped paths:
+题目图片路径使用相对于 `public/` 或书目作用域的路径：
 
 ```json
 {
@@ -117,51 +130,50 @@ Question image paths use public-relative or book-scoped paths:
 }
 ```
 
-At render time, these are resolved via `useAssetUrl`:
-- **Browser**: `/books/{bookId}/questions/...`
-- **Desktop**: `data:image/png;base64,...` via Tauri `load_asset_data_url`
+渲染时通过 `useAssetUrl` 解析：
+- **Web 端**：`/books/{bookId}/questions/...`
+- **桌面端**：`data:image/png;base64,...`（通过 Tauri `load_asset_data_url` 加载）
 
-## Review Workflow
+## 桌面端数据目录
 
-1. Open 错题录入.
-2. Enter page number and question number.
-3. Pick the matched question.
-4. Choose a review time.
-5. Open 复习 when the mistake is due.
-6. Reveal the answer and rate it with Again, Hard, Good, or Easy.
-
-Only manually marked mistakes enter the review queue. The review page preserves session state across navigation. A new round is generated only on explicit continuation or new-day start.
-
-## Multi-Book Support
-
-- Select active book via navbar dropdown.
-- Each book has isolated review data (cards, logs, mistakes, fingerprints).
-- Book switch triggers: question reload, review data rehydration, asset cache clear.
-- Web mode auto-selects default book from `/books.json` manifest.
-- Desktop mode auto-registers bundled books on first launch.
-- Legacy data auto-migrated through two-phase migration (v1: default dir, v2: book001 rename).
-
-## Development
-
-```bash
-npm install
-npm run dev          # Web dev server
-npm run build        # Production build
-npm run preview      # Preview production build
-npm run tauri:dev    # Tauri desktop app (development)
-npm run tauri:build  # Build Windows desktop app
+```
+%APPDATA%\MathLoop\
+├── mathloop.db                     # SQLite 数据库
+├── books\
+│   ├── book001\                    # 高等数学基础篇·严选题
+│   │   ├── data\questions.json
+│   │   ├── questions\              # 题目图片
+│   │   ├── answers\                # 答案图片
+│   │   ├── pages\                  # 整页扫描
+│   │   └── question-fixes\         # 修正图片
+│   └── book002\                    # 武忠祥高等数学辅导讲义·严选题
+│       └── data\questions.json
+└── backups\
+    ├── pre-migration-*.json        # 迁移前自动备份
+    ├── mathloop-auto-*.json        # 启动自动备份（保留 30 份）
+    └── questions-before-tip-*.json # Tips 更新前备份
 ```
 
-Tauri builds require Rust, Cargo, and Microsoft C++ Build Tools with Windows SDK.
+桌面端将个人数据存储在 `%APPDATA%\MathLoop\`，而非应用包内。首次启动时自动创建目录、初始化 SQLite、复制内置题目资源并生成自动备份。
 
-## Desktop Data Safety
+## 多书目支持
 
-The desktop app stores personal data in `%APPDATA%\MathLoop\`, not inside the app bundle. On startup, MathLoop creates this directory, initializes SQLite, copies missing bundled question assets, and writes automatic backups. Up to 30 auto-backups are retained.
+- 通过导航栏下拉菜单切换当前书目
+- 每本书目拥有独立的复习数据（卡片、日志、错题、指纹）
+- 切换书目时：重新加载题目、重新读取复习数据、清空资源缓存
+- Web 端从 `/books.json` 清单自动选择默认书目
+- 桌面端首次启动自动注册内置书目
+- 旧版数据通过两阶段迁移自动升级（v1: 默认目录 → v2: book001 重命名）
 
-To migrate current web data: export a JSON backup from `/backup` in the web app, then import it in the desktop app.
+## 数据迁移
 
-## GitHub
+从 Web 端迁移到桌面端：在 Web 端 `/backup` 页面导出 JSON 备份，然后在桌面端导入即可。
 
-Primary repository: <https://github.com/Jim2474/mathloop>
+## 相关仓库
 
-Data remote: <https://github.com/Jim2474/math_review_data>
+- **主仓库**：<https://github.com/Jim2474/mathloop>
+- **题目数据**：<https://github.com/Jim2474/math_review_data>
+
+## 许可证
+
+MIT
