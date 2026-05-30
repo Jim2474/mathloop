@@ -21,6 +21,7 @@ MathLoop 是一款完全本地化的数学错题管理应用，基于 [FSRS](htt
 |---------|------|--------|--------|
 | book001 | 高等数学基础篇·严选题 | 256 | 9 |
 | book002 | 武忠祥高等数学辅导讲义·严选题 | 238 | 6 |
+| book003 | 控制考研777习题册 | 308 | 8 |
 
 ## 技术栈
 
@@ -86,6 +87,7 @@ public/
       pages/                 # 整页扫描
       question-fixes/        # 修正图片
     book002/                 # 书目 2 资源
+    book003/                 # 书目 3 资源
 src/
   app/App.tsx                # 应用启动：书目加载、题目加载、复习同步
   components/
@@ -147,6 +149,7 @@ src-tauri/
 │   │   ├── pages\                  # 整页扫描
 │   │   └── question-fixes\         # 修正图片
 │   └── book002\                    # 武忠祥高等数学辅导讲义·严选题
+│   └── book003\                    # 控制考研777习题册
 │       └── data\questions.json
 └── backups\
     ├── pre-migration-*.json        # 迁移前自动备份

@@ -75,6 +75,11 @@ function matchesAnyPage(question: Question, input: string): boolean {
 }
 
 function matchesQuestionNo(question: Question, input: string): boolean {
+  // When input contains a hyphen (e.g. "2-22"), match the full questionNo directly
+  if (input.includes("-")) {
+    return normalizeLoose(question.questionNo) === normalizeLoose(input);
+  }
+
   const inputNumber = extractNumber(input);
   const questionNumber = extractNumber(question.questionNo);
   const idQuestionNumber = extractIdQuestionNumber(question.id);

@@ -643,7 +643,7 @@ function findBatchQuestion({
   return questions.find(
     (question) =>
       question.chapter === chapter &&
-      question.section === section &&
+      (question.section === section || question.section === "") &&
       normalizeQuestionNo(question.questionNo) === normalizedQuestionNo,
   );
 }
@@ -662,6 +662,11 @@ function parseQuestionNumbers(value: string): string[] {
   for (const token of normalized.split(/\s+/)) {
     const range = token.match(/^(\d+)-(\d+)$/);
     if (range) {
+      // If the second number has 2+ digits, treat as a question ID (e.g. "2-22"), not a range
+      if (range[2].length >= 2) {
+        result.push(token);
+        continue;
+      }
       const start = Number(range[1]);
       const end = Number(range[2]);
       const direction = start <= end ? 1 : -1;
@@ -681,6 +686,10 @@ function parseQuestionNumbers(value: string): string[] {
 }
 
 function normalizeQuestionNo(value: string): string {
+  // Preserve hyphenated question numbers like "2-22" for exact matching
+  if (value.includes("-")) {
+    return value.toLowerCase().replace(/\s+/g, "");
+  }
   const match = value.match(/\d+/);
   return match ? String(Number(match[0])) : value.trim();
 }
