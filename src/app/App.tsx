@@ -8,14 +8,18 @@ import QuestionDetailPage from "../pages/QuestionDetailPage";
 import QuestionListPage from "../pages/QuestionListPage";
 import ReviewPage from "../pages/ReviewPage";
 import { initializeDesktopRuntime } from "../services/desktopBridge";
+import { useBeforeUnloadSave } from "../hooks/useBeforeUnloadSave";
 import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 
 export default function App() {
+  useBeforeUnloadSave();
+
   const loadQuestions = useQuestionStore((state) => state.loadQuestions);
   const questions = useQuestionStore((state) => state.questions);
   const hasHydrated = useReviewStore((state) => state.hasHydrated);
+  const isReady = useReviewStore((state) => state.isReady);
   const syncQuestionLibrary = useReviewStore((state) => state.syncQuestionLibrary);
   const cleanupOrphanReviewData = useReviewStore((state) => state.cleanupOrphanReviewData);
 
@@ -36,13 +40,16 @@ export default function App() {
     void boot();
   }, [activeBookId, loadQuestions]);
 
-  // Sync review library when hydrated
+  // Sync review library only after book-scoped data is fully loaded.
+  // isReady is set by loadReviewForCurrentBook(); running syncQuestionLibrary
+  // before that would trigger a persist write with empty mistakeRecords,
+  // wiping any data that was loaded from localStorage.
   useEffect(() => {
-    if (hasHydrated && questions.length > 0) {
+    if (hasHydrated && isReady && questions.length > 0) {
       syncQuestionLibrary(questions);
       cleanupOrphanReviewData(questions);
     }
-  }, [hasHydrated, questions, syncQuestionLibrary, cleanupOrphanReviewData]);
+  }, [hasHydrated, isReady, questions, syncQuestionLibrary, cleanupOrphanReviewData]);
 
   return (
     <AppShell>

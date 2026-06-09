@@ -5,10 +5,12 @@ import { REVIEW_STORAGE_KEY, normalizeSettings } from "../services/backupService
 import {
   createReviewPersistStorage,
   removePersistedReviewState,
+  setSwitchingBook,
 } from "../services/reviewPersistStorage";
 import { useBookStore } from "./useBookStore";
 import { invokeDesktop, isTauriRuntime } from "../services/desktopBridge";
 import { clearDesktopAssetCache } from "../hooks/useAssetUrl";
+import { getActiveBookId } from "../utils/bookId";
 import type { Question } from "../types/question";
 import type {
   DailyReviewSession,
@@ -39,6 +41,8 @@ type ReviewState = {
   settings: ReviewSettings;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
+  isReady: boolean;
+  setReady: () => void;
   initializeCards: (questions: Question[]) => void;
   syncQuestionLibrary: (questions: Question[]) => ReviewSyncResult;
   cleanupOrphanReviewData: (questions: Question[]) => ReviewCleanupResult;
@@ -82,12 +86,29 @@ export const useReviewStore = create<ReviewState>()(
       settings: defaultReviewSettings,
       hasHydrated: false,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+      isReady: false,
+      setReady: () => set({ isReady: true }),
       initializeCards: (questions) => {
         get().syncQuestionLibrary(questions);
       },
       syncQuestionLibrary: (questions) => {
         const timestamp = new Date().toISOString();
         const state = get();
+
+        // Skip if no new questions — avoids unnecessary persist writes
+        // that could race with book data loading
+        const allHaveCards = questions.length > 0 &&
+          questions.every((q) => state.cards[q.id] != null);
+        if (allHaveCards && Object.keys(state.questionFingerprints ?? {}).length > 0) {
+          return {
+            syncedAt: timestamp,
+            initializedCards: 0,
+            changedFingerprints: 0,
+            orphanCards: 0,
+            totalCards: Object.keys(state.cards).length,
+          };
+        }
+
         const preview = getLibrarySyncPreview({
           questions,
           cards: state.cards,
@@ -112,8 +133,35 @@ export const useReviewStore = create<ReviewState>()(
             }
           }
 
+          // Explicitly preserve user data that must never be lost.
+          // During startup, mistakeRecords may not yet be in the Zustand state
+          // due to race between hydration and loadReviewForCurrentBook.
+          // Recover from localStorage as a safety net.
+          let safeMistakeRecords = state.mistakeRecords;
+          let safeReviewLogs = state.reviewLogs;
+          let safeDailySession = state.dailyReviewSession;
+          if (Object.keys(safeMistakeRecords).length === 0) {
+            try {
+              const raw = localStorage.getItem(
+                `${REVIEW_STORAGE_KEY}::${getActiveBookId() || ''}`
+              );
+              if (raw) {
+                const saved = JSON.parse(raw);
+                const savedState = saved.state ?? saved;
+                if (savedState.mistakeRecords && Object.keys(savedState.mistakeRecords).length > 0) {
+                  safeMistakeRecords = savedState.mistakeRecords;
+                  safeReviewLogs = savedState.reviewLogs || [];
+                  safeDailySession = savedState.dailyReviewSession || null;
+                }
+              }
+            } catch { /* keep current state */ }
+          }
+
           return {
             cards: nextCards,
+            mistakeRecords: safeMistakeRecords,
+            reviewLogs: safeReviewLogs,
+            dailyReviewSession: safeDailySession,
             questionFingerprints: {
               ...(state.questionFingerprints ?? {}),
               ...buildFingerprintMap(questions),
@@ -402,6 +450,7 @@ export const useReviewStore = create<ReviewState>()(
         lastSyncResult: state.lastSyncResult,
         dailyReviewSession: state.dailyReviewSession,
         settings: state.settings,
+        // isReady and hasHydrated are runtime-only, never persisted
       }),
     },
   ),
@@ -441,23 +490,28 @@ let previousBookId: string | null = null;
 let needsInitialLoad = true;
 
 async function loadReviewForCurrentBook() {
-  let stored: string | null = null;
-  const result = reviewStorage.getItem(REVIEW_STORAGE_KEY);
-  if (result && typeof result !== "string" && "then" in result) {
-    stored = await (result as Promise<string | null>);
-  } else {
-    stored = result as string | null;
-  }
-
-  if (!hasRealReviewData(stored)) {
-    const legacy = await tryMigrateLegacyReviewState();
-    if (legacy) {
-      reviewStorage.setItem(REVIEW_STORAGE_KEY, legacy);
-      stored = legacy;
+  try {
+    let stored: string | null = null;
+    const result = reviewStorage.getItem(REVIEW_STORAGE_KEY);
+    if (result && typeof result !== "string" && "then" in result) {
+      stored = await (result as Promise<string | null>);
+    } else {
+      stored = result as string | null;
     }
-  }
 
-  applyStoredReviewState(stored);
+    if (!hasRealReviewData(stored)) {
+      const legacy = await tryMigrateLegacyReviewState();
+      if (legacy) {
+        reviewStorage.setItem(REVIEW_STORAGE_KEY, legacy);
+        stored = legacy;
+      }
+    }
+
+    applyStoredReviewState(stored);
+  } finally {
+    setSwitchingBook(false);
+    useReviewStore.getState().setReady();
+  }
 }
 
 function hasRealReviewData(stored: string | null): boolean {
@@ -506,14 +560,17 @@ function applyStoredReviewState(stored: string | null | undefined) {
     } catch {
       useReviewStore.setState(emptyState);
     }
-  } else {
-    useReviewStore.setState(emptyState);
   }
+  // DO NOT wipe state when stored is null/undefined.
+  // The store may already have valid in-memory state from a previous load
+  // or from syncQuestionLibrary. Wiping to empty loses user data.
 }
 
 useBookStore.subscribe((state) => {
   const newBookId = state.activeBookId;
   if (newBookId === previousBookId) return;
+
+  const isActualSwitch = previousBookId !== null && previousBookId !== newBookId;
   previousBookId = newBookId;
 
   if (!useReviewStore.getState().hasHydrated) {
@@ -522,6 +579,9 @@ useBookStore.subscribe((state) => {
   }
   needsInitialLoad = false;
   clearDesktopAssetCache();
+  if (isActualSwitch) {
+    setSwitchingBook(true);
+  }
   void loadReviewForCurrentBook();
 });
 
