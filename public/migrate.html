@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"><title>MathLoop Tauri -> Web</title>
+<style>
+  body { font-family: system-ui; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+  button { padding: 12px 24px; font-size: 16px; cursor: pointer; border-radius: 8px; border: 1px solid #ccc; background: #2563eb; color: #fff; }
+  .ok { color: #166534; } .err { color: #dc2626; }
+  #log { margin-top: 20px; white-space: pre-wrap; font-size: 14px; background: #f5f5f5; padding: 15px; border-radius: 8px; }
+</style></head>
+<body>
+<h1>MathLoop 数据迁移</h1>
+<p>将 Tauri 桌面版的复习数据恢复到 Web 端 localStorage。</p>
+<p><strong>迁移前建议先在"备份"页导出当前数据。</strong></p>
+<button onclick="migrateAll()">开始迁移</button>
+<a href="/" style="margin-left:10px;color:#2563eb;">返回 MathLoop</a>
+<div id="log"></div>
+<script>
+async function migrateAll() {
+  const log = document.getElementById('log');
+  log.innerHTML = '迁移中...';
+  const books = ['book001', 'book002', 'book003'];
+  for (const id of books) {
+    try {
+      const resp = await fetch(`migrate_${id}.json`);
+      if (!resp.ok) { log.innerHTML += `<span class="err">\n${id}: 文件不存在</span>`; continue; }
+      const { key, value } = await resp.json();
+      localStorage.setItem(key, value);
+      const s = JSON.parse(value).state;
+      const mr = Object.keys(s.mistakeRecords || {}).length;
+      const cards = Object.keys(s.cards || {}).length;
+      log.innerHTML += `<span class="ok">\n${id}: ${mr} 错题, ${cards} 卡片</span>`;
+    } catch(e) {
+      log.innerHTML += `<span class="err">\n${id}: ${e.message}</span>`;
+    }
+  }
+  log.innerHTML += '\n\n迁移完成！<a href="/">打开 MathLoop</a>';
+}
+</script>
+</body>
+</html>

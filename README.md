@@ -20,7 +20,7 @@ MathLoop 是一款完全本地化的数学错题管理应用，基于 [FSRS](htt
 | 书目 ID | 名称 | 题目数 | 章节数 |
 |---------|------|--------|--------|
 | book001 | 高等数学基础篇·严选题 | 256 | 9 |
-| book002 | 武忠祥高等数学辅导讲义·严选题 | 238 | 6 |
+| book002 | 武忠祥高等数学辅导讲义·严选题 | 287 | 6 |
 | book003 | 控制考研777习题册 | 308 | 8 |
 
 ## 技术栈
@@ -34,7 +34,7 @@ MathLoop 是一款完全本地化的数学错题管理应用，基于 [FSRS](htt
 | 路由 | React Router DOM v6 |
 | 桌面壳 | Tauri v2（Rust 后端） |
 | 复习引擎 | ts-fsrs（FSRS 算法） |
-| 桌面存储 | SQLite（`%APPDATA%\MathLoop\mathloop.db`） |
+| 桌面存储 | SQLite（平台桌面数据目录下的 `mathloop.db`） |
 | Web 存储 | localStorage |
 
 ## 快速开始
@@ -138,8 +138,16 @@ src-tauri/
 
 ## 桌面端数据目录
 
+| 平台 | 数据根目录 |
+|------|------------|
+| Windows | `%APPDATA%\MathLoop` |
+| macOS | `~/Library/Application Support/MathLoop` |
+| Linux / 其他 Unix | `~/.mathloop` |
+
+目录结构：
+
 ```
-%APPDATA%\MathLoop\
+<MathLoop 数据根目录>\
 ├── mathloop.db                     # SQLite 数据库
 ├── books\
 │   ├── book001\                    # 高等数学基础篇·严选题
@@ -157,7 +165,18 @@ src-tauri/
     └── questions-before-tip-*.json # Tips 更新前备份
 ```
 
-桌面端将个人数据存储在 `%APPDATA%\MathLoop\`，而非应用包内。首次启动时自动创建目录、初始化 SQLite、复制内置题目资源并生成自动备份。
+桌面端将个人数据存储在平台数据目录中，而非应用包内。首次启动时自动创建目录、初始化 SQLite、复制内置题目资源并生成自动备份。
+
+## macOS 移植准备
+
+本仓库包含 macOS 移植准备文件：
+
+- `src-tauri/tauri.macos.conf.json`：macOS 平台配置，Tauri 在 macOS 上自动合并。
+- `src-tauri/icons/icon.icns`：macOS app 图标。
+- `docs/macos-port/HANDOFF.md`：给后续移植 agent 的接手说明。
+- `docs/macos-port/CHECKLIST.md`：Mac 到手后的验证、打包、签名清单。
+
+Windows 上可运行 `npm run verify:port-prep` 验证前端测试、生产构建和 Rust 测试。最终 `.app` / `.dmg` 构建、签名和公证仍需在 macOS 上完成。
 
 ## 多书目支持
 

@@ -54,25 +54,28 @@ fn bootstrap_mathloop_data<R: Runtime>(
     // If book_id is "default" and books/default doesn't exist yet, run legacy path
     let data_dir = if book_id == "default" && !top_dir.join("books").join("default").exists() {
         // Legacy: use top-level dirs (pre-migration)
+        // Resources are scoped under books/book001/ — copy from there
+        let legacy_src = "books/book001";
         for child in ["data", "questions", "answers", "pages", "question-fixes"] {
             fs::create_dir_all(top_dir.join(child)).map_err(to_string)?;
         }
-        copy_missing_resource_dir(&app, "data", &top_dir.join("data"))?;
-        copy_missing_resource_dir(&app, "questions", &top_dir.join("questions"))?;
-        copy_missing_resource_dir(&app, "answers", &top_dir.join("answers"))?;
-        copy_missing_resource_dir(&app, "pages", &top_dir.join("pages"))?;
-        copy_missing_resource_dir(&app, "question-fixes", &top_dir.join("question-fixes"))?;
+        copy_missing_resource_dir(&app, &format!("{}/data", legacy_src), &top_dir.join("data"))?;
+        copy_missing_resource_dir(&app, &format!("{}/questions", legacy_src), &top_dir.join("questions"))?;
+        copy_missing_resource_dir(&app, &format!("{}/answers", legacy_src), &top_dir.join("answers"))?;
+        copy_missing_resource_dir(&app, &format!("{}/pages", legacy_src), &top_dir.join("pages"))?;
+        copy_missing_resource_dir(&app, &format!("{}/question-fixes", legacy_src), &top_dir.join("question-fixes"))?;
         top_dir.clone()
     } else {
         let book_dir = top_dir.join("books").join(&book_id);
+        let book_resource = format!("books/{}", book_id);
         for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
             fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
         }
-        copy_missing_resource_dir(&app, "data", &book_dir.join("data"))?;
-        copy_missing_resource_dir(&app, "questions", &book_dir.join("questions"))?;
-        copy_missing_resource_dir(&app, "answers", &book_dir.join("answers"))?;
-        copy_missing_resource_dir(&app, "pages", &book_dir.join("pages"))?;
-        copy_missing_resource_dir(&app, "question-fixes", &book_dir.join("question-fixes"))?;
+        copy_missing_resource_dir(&app, &format!("{}/data", book_resource), &book_dir.join("data"))?;
+        copy_missing_resource_dir(&app, &format!("{}/questions", book_resource), &book_dir.join("questions"))?;
+        copy_missing_resource_dir(&app, &format!("{}/answers", book_resource), &book_dir.join("answers"))?;
+        copy_missing_resource_dir(&app, &format!("{}/pages", book_resource), &book_dir.join("pages"))?;
+        copy_missing_resource_dir(&app, &format!("{}/question-fixes", book_resource), &book_dir.join("question-fixes"))?;
         book_dir
     };
 
@@ -164,8 +167,8 @@ fn load_questions_json<R: Runtime>(
             if path.exists() {
                 return fs::read_to_string(path).map_err(to_string);
             }
-            // Fallback to resource
-            read_external_or_resource_file(&app, "data/questions.json")
+            // Fallback to resource — use book-scoped path
+            read_external_or_resource_file(&app, &format!("books/{}/data/questions.json", bid))
         }
         None => read_external_or_resource_file(&app, "data/questions.json"),
     }
@@ -183,7 +186,7 @@ fn load_question_image_fixes_json<R: Runtime>(
             if path.exists() {
                 fs::read_to_string(path).map_err(to_string)
             } else {
-                read_external_or_resource_file(&app, "data/question-image-fixes.json")
+                read_external_or_resource_file(&app, &format!("books/{}/data/question-image-fixes.json", bid))
             }
         }
         None => read_external_or_resource_file(&app, "data/question-image-fixes.json"),
@@ -385,13 +388,29 @@ fn main() {
 }
 
 fn mathloop_data_dir() -> Result<PathBuf, String> {
-    if let Ok(appdata) = env::var("APPDATA") {
-        return Ok(PathBuf::from(appdata).join("MathLoop"));
+    resolve_mathloop_data_dir(
+        env::consts::OS,
+        env::var("APPDATA").ok().as_deref(),
+        env::var("HOME").ok().as_deref(),
+    )
+    .ok_or_else(|| "无法定位用户数据目录。".to_string())
+}
+
+fn resolve_mathloop_data_dir(
+    os: &str,
+    appdata: Option<&str>,
+    home: Option<&str>,
+) -> Option<PathBuf> {
+    match os {
+        "windows" => appdata.map(|value| PathBuf::from(value).join("MathLoop")),
+        "macos" => home.map(|value| {
+            PathBuf::from(value)
+                .join("Library")
+                .join("Application Support")
+                .join("MathLoop")
+        }),
+        _ => home.map(|value| PathBuf::from(value).join(".mathloop")),
     }
-    if let Ok(home) = env::var("HOME") {
-        return Ok(PathBuf::from(home).join(".mathloop"));
-    }
-    Err("无法定位用户数据目录。".to_string())
 }
 
 fn ensure_database(db_path: &Path) -> Result<(), String> {
@@ -515,7 +534,7 @@ fn read_external_or_resource_bytes<R: Runtime>(
     relative_path: &str,
     book_id: Option<&str>,
 ) -> Result<Vec<u8>, String> {
-    // 1. Book-scoped external dir: APPDATA/MathLoop/books/{bookId}/{path}
+    // 1. Book-scoped external dir: MathLoop data dir/books/{bookId}/{path}
     if let Some(bid) = book_id {
         let book_external = mathloop_data_dir()?.join("books").join(bid).join(relative_path);
         if book_external.exists() {
@@ -523,7 +542,7 @@ fn read_external_or_resource_bytes<R: Runtime>(
         }
     }
 
-    // 2. Top-level external dir: APPDATA/MathLoop/{path} (legacy)
+    // 2. Top-level external dir: MathLoop data dir/{path} (legacy)
     let external = mathloop_data_dir()?.join(relative_path);
     if external.exists() {
         return fs::read(external).map_err(to_string);
@@ -595,7 +614,10 @@ fn copy_dir_missing(source: &Path, target: &Path) -> Result<(), String> {
         let target_path = target.join(entry.file_name());
         if entry.file_type().map_err(to_string)?.is_dir() {
             copy_dir_missing(&source_path, &target_path)?;
-        } else if !target_path.exists() {
+        } else {
+            // Always copy — overwrites stale files from previous app versions.
+            // The bundled resource is the canonical source; the app data dir
+            // must reflect the currently installed version.
             fs::copy(&source_path, &target_path).map_err(to_string)?;
         }
     }
@@ -634,10 +656,10 @@ fn resolve_book_dir(book_id: &str) -> Result<PathBuf, String> {
 }
 
 fn review_key_for(book_id: &str, key: &str) -> String {
-    if key == SETTINGS_KEY {
+    if key == SETTINGS_KEY || key == BOOK_REGISTRY_KEY || key == MIGRATION_VERSION_KEY {
         key.to_string()
     } else {
-        format!("{}{}", NEW_REVIEW_KEY_PREFIX, book_id)
+        format!("{}{}::{}", NEW_REVIEW_KEY_PREFIX, book_id, key)
     }
 }
 
@@ -688,6 +710,7 @@ fn run_migration<R: Runtime>(_app: &tauri::AppHandle<R>) -> Result<(), String> {
     match version.as_deref() {
         None => run_migration_v1(&connection, &top_dir)?,
         Some("1") => run_migration_v2(&connection, &top_dir)?,
+        Some("2") => run_migration_v3(&connection)?,
         _ => {}
     }
 
@@ -887,6 +910,84 @@ fn run_migration_v1(connection: &Connection, top_dir: &Path) -> Result<(), Strin
     Ok(())
 }
 
+fn run_migration_v3(connection: &Connection) -> Result<(), String> {
+    connection.execute_batch("BEGIN;").map_err(to_string)?;
+
+    let result = (|| -> Result<(), String> {
+        // Migrate review keys from old format "review::bookId" to new "review::bookId::key"
+        let mut stmt = connection
+            .prepare("SELECT key, value, updated_at FROM review_store WHERE key LIKE ?1")
+            .map_err(to_string)?;
+
+        let old_prefix = format!("{}%", NEW_REVIEW_KEY_PREFIX);
+        let rows: Vec<(String, String, String)> = stmt
+            .query_map(params![old_prefix], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(to_string)?
+            .filter_map(Result::ok)
+            .collect();
+
+        for (old_key, value, updated_at) in &rows {
+            // Skip keys that already use the new format (contain "::" after prefix)
+            let suffix = old_key.strip_prefix(NEW_REVIEW_KEY_PREFIX).unwrap_or(old_key);
+            if suffix.contains("::") {
+                continue; // Already migrated
+            }
+
+            // Old format: review::book001 → New: review::book001::openclaw-review-state
+            let new_key = format!("{}::openclaw-review-state", old_key);
+
+            // Check if new key already exists
+            let exists: bool = connection
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM review_store WHERE key = ?1",
+                    params![new_key],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(to_string)?
+                .unwrap_or(false);
+
+            if !exists {
+                connection
+                    .execute(
+                        "INSERT INTO review_store (key, value, updated_at) VALUES (?1, ?2, ?3)",
+                        params![new_key, value, updated_at],
+                    )
+                    .map_err(to_string)?;
+            }
+
+            // Delete old key
+            connection
+                .execute("DELETE FROM review_store WHERE key = ?1", params![old_key])
+                .map_err(to_string)?;
+        }
+
+        // Bump version
+        connection
+            .execute(
+                "INSERT OR REPLACE INTO review_store (key, value, updated_at)
+                 VALUES (?1, ?2, ?3)",
+                params![MIGRATION_VERSION_KEY, "3", Local::now().to_rfc3339()],
+            )
+            .map_err(to_string)?;
+
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = connection.execute_batch("ROLLBACK;");
+        return result;
+    }
+    connection.execute_batch("COMMIT;").map_err(to_string)?;
+    Ok(())
+}
+
 fn register_bundled_books<R: Runtime>(
     app: &tauri::AppHandle<R>,
     top_dir: &Path,
@@ -957,4 +1058,41 @@ fn register_bundled_books<R: Runtime>(
 
 fn to_string(error: impl std::fmt::Display) -> String {
     error.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_windows_data_dir_from_appdata() {
+        let result = resolve_mathloop_data_dir("windows", Some("C:\\Users\\Alice\\AppData\\Roaming"), None);
+
+        assert_eq!(
+            result,
+            Some(PathBuf::from("C:\\Users\\Alice\\AppData\\Roaming").join("MathLoop"))
+        );
+    }
+
+    #[test]
+    fn resolves_macos_data_dir_to_application_support() {
+        let result = resolve_mathloop_data_dir("macos", None, Some("/Users/alice"));
+
+        assert_eq!(
+            result,
+            Some(
+                PathBuf::from("/Users/alice")
+                    .join("Library")
+                    .join("Application Support")
+                    .join("MathLoop")
+            )
+        );
+    }
+
+    #[test]
+    fn resolves_linux_data_dir_to_hidden_home_folder() {
+        let result = resolve_mathloop_data_dir("linux", None, Some("/home/alice"));
+
+        assert_eq!(result, Some(PathBuf::from("/home/alice").join(".mathloop")));
+    }
 }
