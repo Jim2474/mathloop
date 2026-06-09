@@ -12,6 +12,7 @@ import {
   getQuestionImagePaths,
   getQuestionPageImagePath,
 } from "../utils/questionImages";
+import { getQuestionSectionLabel } from "../utils/questionStats";
 import { ratingLabels } from "../utils/reviewLabels";
 
 const ratings: ReviewRating[] = ["Again", "Hard", "Good", "Easy"];
@@ -209,7 +210,7 @@ export default function ReviewPage() {
               {nextMistake.question.id}
             </p>
             <p className="mt-1 text-sm text-ink/65">
-              {nextMistake.question.chapter} / {nextMistake.question.section} / {nextMistake.question.questionNo}
+              {nextMistake.question.chapter} / {getQuestionSectionLabel(nextMistake.question)} / {nextMistake.question.questionNo}
             </p>
             <p className="mt-3 text-sm font-semibold text-cinnabar">
               计划时间：{formatDateTime(nextMistake.due?.toISOString())}
@@ -284,7 +285,7 @@ export default function ReviewPage() {
               {currentQuestion.chapter || "未标注章节"}
             </h2>
             <p className="mt-3 text-sm text-ink/58">
-              {currentQuestion.section || "未标注题型"}
+              {getQuestionSectionLabel(currentQuestion)}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">

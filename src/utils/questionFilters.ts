@@ -1,4 +1,5 @@
 import type { Question, UncertainFilter } from "../types/question";
+import { questionMatchesSection } from "./questionStats";
 
 type FilterParams = {
   questions: Question[];
@@ -22,7 +23,7 @@ export function filterQuestions({
       return false;
     }
 
-    if (selectedSection !== "all" && question.section !== selectedSection) {
+    if (!questionMatchesSection(question, selectedSection)) {
       return false;
     }
 

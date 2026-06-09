@@ -1,7 +1,27 @@
 import type { Question, QuestionType } from "../types/question";
 
 export function inferQuestionType(question: Question): QuestionType {
-  return inferFromText(question.section) ?? inferFromText(question.questionNo) ?? "未分类";
+  return (
+    inferFromText(question.section) ??
+    inferFromText(question.questionNo) ??
+    inferFromBookPattern(question) ??
+    "未分类"
+  );
+}
+
+export function getQuestionSectionLabel(question: Question): string {
+  const section = question.section.trim();
+  if (section) {
+    return section;
+  }
+  return inferQuestionType(question);
+}
+
+export function questionMatchesSection(question: Question, section: string): boolean {
+  if (!section || section === "all") {
+    return true;
+  }
+  return question.section.trim() === section || getQuestionSectionLabel(question) === section;
 }
 
 function inferFromText(text: string): QuestionType | null {
@@ -12,6 +32,14 @@ function inferFromText(text: string): QuestionType | null {
     return "填空题";
   }
   if (text.includes("解答") || text.includes("计算") || text.includes("证明")) {
+    return "解答题";
+  }
+  return null;
+}
+
+function inferFromBookPattern(question: Question): QuestionType | null {
+  const questionNo = question.questionNo.trim();
+  if (questionNo.includes("-") && question.bookName.includes("习题")) {
     return "解答题";
   }
   return null;
@@ -45,7 +73,12 @@ export function getDashboardStats(questions: Question[]) {
 }
 
 export function getUniqueValues(questions: Question[], key: "chapter" | "section") {
-  return Array.from(new Set(questions.map((question) => question[key]).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right, "zh-CN"),
+  const values =
+    key === "section"
+      ? questions.map(getQuestionSectionLabel)
+      : questions.map((question) => question[key]);
+
+  return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
+    left.localeCompare(right, "zh-CN"),
   );
 }

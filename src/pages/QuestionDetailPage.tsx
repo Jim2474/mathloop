@@ -4,7 +4,7 @@ import QuestionImage from "../components/question/QuestionImage";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import { getAnswerImagePaths, getQuestionImagePaths } from "../utils/questionImages";
-import { inferQuestionType } from "../utils/questionStats";
+import { getQuestionSectionLabel, inferQuestionType } from "../utils/questionStats";
 import { formatDateTime } from "../utils/date";
 import { stateLabel } from "../utils/reviewLabels";
 
@@ -67,7 +67,7 @@ export default function QuestionDetailPage() {
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <MetaItem label="章节" value={question.chapter} />
           <MetaItem label="题型" value={questionType} />
-          <MetaItem label="小节" value={question.section} />
+          <MetaItem label="小节" value={getQuestionSectionLabel(question)} />
           <MetaItem label="页码范围" value={question.pageRangeText} />
           <MetaItem label="PDF 页码" value={question.pdfPageLabel} />
           <MetaItem label="印刷页码" value={question.printedPageNumber} />

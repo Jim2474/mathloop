@@ -44,9 +44,18 @@ export function toDesktopAssetUrl(path: string): string {
   if (!isTauriRuntime() || !desktopDataDir) {
     return "";
   }
-  const relativePath = path.replace(/^\/+/, "").replace(/\//g, "\\");
-  const separator = desktopDataDir.endsWith("\\") || desktopDataDir.endsWith("/") ? "" : "\\";
-  return convertFileSrc(`${desktopDataDir}${separator}${relativePath}`);
+  return convertFileSrc(buildDesktopAssetPath(desktopDataDir, path));
+}
+
+export function buildDesktopAssetPath(dataDir: string, path: string): string {
+  const usesWindowsSeparators = dataDir.includes("\\");
+  const separator = usesWindowsSeparators ? "\\" : "/";
+  const relativePath = path
+    .trim()
+    .replace(/^[/\\]+/, "")
+    .replace(/[\\/]+/g, separator);
+  const base = dataDir.replace(/[\\/]+$/, "");
+  return `${base}${separator}${relativePath}`;
 }
 
 export async function loadDesktopAssetDataUrl(path: string, bookId?: string): Promise<string> {

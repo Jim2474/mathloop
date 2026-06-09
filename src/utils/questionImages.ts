@@ -46,7 +46,12 @@ export function getQuestionPageImagePath(question: Question): string {
   if (!Number.isFinite(question.pageStart)) {
     return "";
   }
-  return `pages/page_${String(question.pageStart).padStart(3, "0")}.png`;
+  const bookId = getActiveBookId();
+  const pageFile = `page_${String(question.pageStart).padStart(3, "0")}.png`;
+  if (bookId) {
+    return `books/${bookId}/pages/${pageFile}`;
+  }
+  return `pages/${pageFile}`;
 }
 
 function isNonEmptyPath(value: string | null | undefined): value is string {

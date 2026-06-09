@@ -146,7 +146,7 @@ function AddBookDialog({
       <div className="fixed left-1/2 top-1/2 z-50 w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/50 bg-white/95 p-6 shadow-2xl backdrop-blur-xl">
         <h3 className="text-xl font-semibold text-ink">添加新书</h3>
         <p className="mt-2 text-sm text-ink/60">
-          请先将 questions.json 放到 %APPDATA%\MathLoop\books\&lt;书本ID&gt;\data\ 目录下。
+          请先将 questions.json 放到桌面数据目录的 books\&lt;书本ID&gt;\data\ 目录下。
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <label className="block space-y-1 text-sm">

@@ -1,4 +1,5 @@
 import type { Question } from "../types/question";
+import { getQuestionSectionLabel } from "../utils/questionStats";
 
 type LookupParams = {
   questions: Question[];
@@ -32,7 +33,7 @@ export function findQuestionsByPageAndNumber({
 }
 
 export function getQuestionLookupLabel(question: Question): string {
-  return `${question.pageRangeText || `源页 ${question.pageStart}`} / ${question.section} / ${question.questionNo}`;
+  return `${question.pageRangeText || `源页 ${question.pageStart}`} / ${getQuestionSectionLabel(question)} / ${question.questionNo}`;
 }
 
 function matchesPrintedPage(question: Question, input: string): boolean {

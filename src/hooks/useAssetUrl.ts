@@ -87,7 +87,9 @@ function normalizeAssetPath(path: string | undefined): string {
 function toBrowserAssetUrl(path: string): string {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const bookId = getActiveBookId();
-  if (bookId && !cleanPath.startsWith(`/books/`)) {
+  // Page images and legacy top-level assets are NOT book-scoped.
+  // Questions and answers ARE book-scoped (under books/{bookId}/).
+  if (bookId && !cleanPath.startsWith(`/books/`) && !cleanPath.startsWith(`/pages/`)) {
     return `/books/${bookId}${cleanPath}`;
   }
   return cleanPath;

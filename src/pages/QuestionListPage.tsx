@@ -6,7 +6,7 @@ import { useReviewStore } from "../store/useReviewStore";
 import type { UncertainFilter } from "../types/question";
 import { formatDateTime } from "../utils/date";
 import { filterQuestions } from "../utils/questionFilters";
-import { getUniqueValues } from "../utils/questionStats";
+import { getQuestionSectionLabel, getUniqueValues } from "../utils/questionStats";
 
 type QuestionView = "all" | "today" | "reviewed";
 
@@ -218,7 +218,7 @@ export default function QuestionListPage() {
                 <span className="font-mono text-sm font-semibold text-slateblue">{question.id}</span>
                 <span className="text-sm text-ink/75">{question.bookName}</span>
                 <span className="text-sm text-ink/75">{question.chapter}</span>
-                <span className="text-sm text-ink/75">{question.section}</span>
+                <span className="text-sm text-ink/75">{getQuestionSectionLabel(question)}</span>
                 <span className="text-sm font-medium">{question.questionNo}</span>
                 <span className="text-sm text-ink/65">{question.pageRangeText}</span>
                 <span className="text-sm font-medium text-ink/70">{getQuestionLocator(question)}</span>

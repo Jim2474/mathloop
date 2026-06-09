@@ -11,6 +11,7 @@ import { useReviewStore } from "../store/useReviewStore";
 import type { Question } from "../types/question";
 import type { ReviewMistakeRecord } from "../types/review";
 import { formatDateTime, parseDateTimeLocal, toDateTimeLocalValue } from "../utils/date";
+import { getQuestionSectionLabel, questionMatchesSection } from "../utils/questionStats";
 
 type BatchSectionKey = "choice" | "fill" | "solution";
 
@@ -511,7 +512,7 @@ export default function MistakeEntryPage() {
                             </p>
                             <p className="mt-1 text-sm text-ink/70">{getQuestionLookupLabel(question)}</p>
                             <p className="mt-1 truncate text-xs text-ink/55">
-                              {question.chapter} / {question.section}
+                              {question.chapter} / {getQuestionSectionLabel(question)}
                             </p>
                             {alreadyMarked ? (
                               <span className="mt-2 inline-flex rounded-full bg-cinnabar/12 px-3 py-1 text-xs font-semibold text-cinnabar">
@@ -643,8 +644,8 @@ function findBatchQuestion({
   return questions.find(
     (question) =>
       question.chapter === chapter &&
-      (question.section === section || question.section === "") &&
-      normalizeQuestionNo(question.questionNo) === normalizedQuestionNo,
+      questionMatchesBatchSection(question, section) &&
+      matchesBatchQuestionNo(question.questionNo, normalizedQuestionNo),
   );
 }
 
@@ -662,8 +663,8 @@ function parseQuestionNumbers(value: string): string[] {
   for (const token of normalized.split(/\s+/)) {
     const range = token.match(/^(\d+)-(\d+)$/);
     if (range) {
-      // If the second number has 2+ digits, treat as a question ID (e.g. "2-22"), not a range
-      if (range[2].length >= 2) {
+      // Treat chapter-style question numbers (e.g. "2-22") as exact IDs, not ranges.
+      if (Number(range[1]) > 1 || range[2].length >= 2) {
         result.push(token);
         continue;
       }
@@ -683,6 +684,28 @@ function parseQuestionNumbers(value: string): string[] {
   }
 
   return Array.from(new Set(result));
+}
+
+function questionMatchesBatchSection(question: Question, section: string): boolean {
+  if (question.section.trim()) {
+    return questionMatchesSection(question, section);
+  }
+  if (getQuestionSectionLabel(question) === section) {
+    return true;
+  }
+  return true;
+}
+
+function matchesBatchQuestionNo(questionNo: string, normalizedInput: string): boolean {
+  const normalizedQuestionNo = normalizeQuestionNo(questionNo);
+  if (normalizedQuestionNo === normalizedInput) {
+    return true;
+  }
+  if (normalizedQuestionNo.includes("-") && !normalizedInput.includes("-")) {
+    const suffix = normalizedQuestionNo.split("-").at(-1);
+    return suffix === normalizedInput;
+  }
+  return false;
 }
 
 function normalizeQuestionNo(value: string): string {
