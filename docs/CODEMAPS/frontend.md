@@ -1,6 +1,6 @@
 # Frontend Codemap
 
-**Last Updated:** 2026-05-24
+**Last Updated:** 2026-06-09
 **Entry Points:** `src/main.tsx`, `src/app/App.tsx`
 
 ## Architecture
@@ -42,7 +42,8 @@ src/
 │   ├── reviewPersistStorage.ts   # Zustand persist storage adapter (SQLite/localStorage)
 │   └── reviewQueue.ts            # Build daily review queue from cards/logs
 ├── hooks/
-│   └── useAssetUrl.ts            # Resolve asset URLs (data URL on desktop, public URL on web)
+│   ├── useAssetUrl.ts            # Resolve asset URLs (book-scoped questions/answers, shared pages/)
+│   └── useBeforeUnloadSave.ts    # Sync review state to localStorage on tab close (web safety net)
 ├── types/
 │   ├── book.ts                   # BookEntry type
 │   ├── question.ts               # Question, QuestionMeta, AnswerMeta, UncertainFilter
@@ -51,7 +52,7 @@ src/
     ├── bookId.ts                 # getActiveBookId() from useBookStore state
     ├── date.ts                   # Date formatting, timezone-aware ISO
     ├── questionFilters.ts        # Filter questions by chapter/section/search/uncertain
-    ├── questionImages.ts         # Image path fix resolution, fallback paths
+    ├── questionImages.ts         # Image path fix resolution, page image path (book-scoped)
     ├── questionStats.ts          # Chapter distribution, uncertain counts, totals
     └── reviewLabels.ts           # Chinese labels for ratings, review states
 ```
@@ -72,20 +73,22 @@ src/
 - **Loads via:** `questionLoader.loadOpenClawQuestions()` (book-aware)
 
 ### `useReviewStore`
-- **Stores:** `cards`, `reviewLogs`, `mistakeRecords`, `questionFingerprints`, `lastSyncResult`, `dailyReviewSession`, `settings`
+- **Stores:** `cards`, `reviewLogs`, `mistakeRecords`, `questionFingerprints`, `lastSyncResult`, `dailyReviewSession`, `settings`, `hasHydrated`, `isReady`
 - **Actions:** `syncQuestionLibrary`, `rateQuestion`, `markMistakeQuestion`, `importReviewState`, `resetReviewState`, etc.
-- **Persistence:** Full review state via `reviewPersistStorage.createReviewPersistStorage()` (book-scoped)
-- **Key:** `review::{bookId}` (desktop) or `{key}::{bookId}` (web)
-- **Book switch:** Subscribes to `useBookStore`; re-loads review data via `loadReviewForCurrentBook()` with legacy migration fallback
+- **Persistence:** Full review state via `reviewPersistStorage.createReviewPersistStorage()` (book-scoped). Web: guarded against empty-state writes overwriting saved data.
+- **Key:** `review::{bookId}` (desktop) or `openclaw-review-state::{bookId}` (web)
+- **Book switch:** Subscribes to `useBookStore`; `isSwitchingBook` guard blocks writes during actual switches but not initial load. `isReady` flag gates `syncQuestionLibrary` to prevent race with hydration.
 
 ## Key Data Flows
 
 ### App Startup
-1. `App.tsx` mounts -> `loadBooks()`
+1. `App.tsx` mounts -> `loadBooks()` + `useBeforeUnloadSave()` hook
 2. `activeBookId` resolves (persisted or auto-selected)
-3. `initializeDesktopRuntime(bookId)` boots Tauri runtime
+3. `initializeDesktopRuntime(bookId)` boots Tauri runtime (desktop only)
 4. `loadQuestions()` fetches book-scoped questions
-5. Review store hydrates -> `syncQuestionLibrary(questions)` syncs FSRS cards
+5. Review store hydrates from localStorage/SQLite -> `hasHydrated=true`
+6. `loadReviewForCurrentBook()` loads book-scoped data -> `isReady=true`
+7. `syncQuestionLibrary(questions)` syncs FSRS cards (gated on `isReady`)
 
 ### Book Switch
 1. Navbar dropdown -> `switchBook(bookId)`
@@ -95,11 +98,13 @@ src/
 5. `questionStore.loadQuestions()` re-fetches from new book
 6. `clearDesktopAssetCache()` clears cached data URLs
 
-### Desktop Asset Loading
-1. `useAssetUrl("questions/book001_ch01_p006_q001.png")`
-2. Browser: returns `/books/{bookId}/questions/book001_ch01_p006_q001.png`
-3. Desktop: calls `load_asset_data_url(path, bookId)` -> returns `data:image/png;base64,...`
-4. Cached in `Map<string, string>` per path
+### Web Asset URL Routing
+1. `useAssetUrl(path)` -> `toBrowserAssetUrl(path)`
+2. `questions/xxx` -> `/books/{bookId}/questions/xxx` (book-scoped)
+3. `answers/xxx` -> `/books/{bookId}/answers/xxx` (book-scoped)
+4. `pages/xxx` -> `/pages/xxx` (top-level, shared) — page images now also served per-book via `books/{bookId}/pages/`
+5. `getQuestionPageImagePath(question)` returns book-scoped path: `books/{bookId}/pages/page_NNN.png`
+6. Desktop: calls `load_asset_data_url(path, bookId)` -> returns `data:image/png;base64,...`
 
 ## External Dependencies
 

@@ -1,7 +1,7 @@
 # Database Codemap
 
-**Last Updated:** 2026-05-24
-**Database:** SQLite at `%APPDATA%/MathLoop/mathloop.db`
+**Last Updated:** 2026-06-09
+**Database:** SQLite at `<MathLoop data root>/mathloop.db`
 
 ## Schema
 
@@ -111,8 +111,14 @@ migration-version = "2"
 
 ## File System Layer
 
+| Platform | MathLoop data root |
+|----------|--------------------|
+| Windows | `%APPDATA%/MathLoop` |
+| macOS | `~/Library/Application Support/MathLoop` |
+| Linux / other Unix | `~/.mathloop` |
+
 ```
-%APPDATA%/MathLoop/
+<MathLoop data root>/
 ├── mathloop.db                    # SQLite database
 ├── books/
 │   ├── book001/

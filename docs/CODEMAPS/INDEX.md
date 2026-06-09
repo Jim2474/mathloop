@@ -1,6 +1,6 @@
 # MathLoop Codebase Codemaps
 
-**Last Updated:** 2026-05-24
+**Last Updated:** 2026-06-09
 **Primary Entry Points:** `src/main.tsx`, `src-tauri/src/main.rs`
 
 ## Architecture Overview
@@ -43,11 +43,13 @@ MathLoop is a Tauri v2 desktop application with a React frontend for FSRS-based 
          v
 +---------------------------------------------------+
 |  Storage                                           |
-|  SQLite: %APPDATA%/MathLoop/mathloop.db            |
-|  Files:  %APPDATA%/MathLoop/books/{bookId}/        |
+|  SQLite: <MathLoop data root>/mathloop.db          |
+|  Files:  <MathLoop data root>/books/{bookId}/      |
 |  Bundled: public/books/ (Tauri resources)          |
 +---------------------------------------------------+
 ```
+
+Data roots: Windows `%APPDATA%/MathLoop`, macOS `~/Library/Application Support/MathLoop`, Linux/other Unix `~/.mathloop`.
 
 ## Key Codemaps
 

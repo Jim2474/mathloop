@@ -1,6 +1,6 @@
 # Data Flow Codemap
 
-**Last Updated:** 2026-05-24
+**Last Updated:** 2026-06-09
 
 ## 1. Application Startup Flow
 
@@ -30,11 +30,11 @@ App.tsx (useEffect: activeBookId change)
         Web:     fetch("/books/{bookId}/data/questions.json")
         -> set({ questions })
 
-App.tsx (useEffect: hasHydrated && questions)
+App.tsx (useEffect: hasHydrated && isReady && questions)
   -> reviewStore.syncQuestionLibrary(questions)
-     -> Fingerprint new/changed questions
-     -> Create FSRS cards for new questions
-     -> set({ cards, questionFingerprints, lastSyncResult })
+     -> Skips if all questions already have cards (idempotent)
+     -> Falls back to localStorage if in-memory mistakeRecords empty
+     -> Creates FSRS cards for new questions only
   -> reviewStore.cleanupOrphanReviewData(questions)
      -> Remove cards/logs/fingerprints for deleted questions
 ```
