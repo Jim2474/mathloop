@@ -24,42 +24,42 @@ CHAPTER_CONFIG = {
         "question_start": 6,   # PDF page (1-indexed)
         "question_end": 22,    # Last question page
         "answer_start": 147,   # Answer section start
-        "answer_end": 157,     # Answer section end (before ch2 answers)
+        "answer_end": 161,     # Answer section end
     },
     2: {
         "name": "第二章 一元函数微分学",
         "question_start": 23,
         "question_end": 38,
         "answer_start": 158,
-        "answer_end": 167,
+        "answer_end": 170,
     },
     3: {
         "name": "第三章 一元函数积分学",
         "question_start": 39,
         "question_end": 58,
         "answer_start": 168,
-        "answer_end": 177,
+        "answer_end": 180,
     },
     4: {
         "name": "第四章 常微分方程",
         "question_start": 59,
         "question_end": 71,
         "answer_start": 178,
-        "answer_end": 183,
+        "answer_end": 186,
     },
     5: {
         "name": "第五章 多元函数微分学",
         "question_start": 72,
         "question_end": 88,
         "answer_start": 184,
-        "answer_end": 192,
+        "answer_end": 196,
     },
     6: {
         "name": "第六章 二重积分",
         "question_start": 89,
-        "question_end": 103,
+        "question_end": 105,
         "answer_start": 193,
-        "answer_end": 198,
+        "answer_end": 202,
     },
 }
 
@@ -96,7 +96,14 @@ def parse_text_blocks(page: fitz.Page) -> List[TextBlock]:
     # Get text dict with position info
     text_dict = page.get_text("dict")
 
-    for block in text_dict["blocks"]:
+    # Sort blocks deterministically to avoid non-deterministic text-to-page
+    # assignment near page boundaries across multiple detect_questions() calls.
+    sorted_blocks = sorted(
+        text_dict["blocks"],
+        key=lambda b: (b.get("number", 0), b["bbox"][1], b["bbox"][0])
+    )
+
+    for block in sorted_blocks:
         if "lines" not in block:
             continue
 
@@ -155,11 +162,12 @@ def detect_questions(doc: fitz.Document, chapter_num: int) -> List[QuestionBound
                 continue
 
             # Detect question numbers (allow space before dot: "4 .xxx")
-            match = re.match(r'^(\d+)\s*[.．]', block.text)
-            if match and block.x < 100 and block.y > 50:
-                next_no = len(question_starts) + 1
+            # Also matches various bullet chars (∙•·) and digit+Chinese-char (e.g. "10设")
+            match = re.match(r'^(\d+)\s*[.．∙•·]', block.text) or re.match(r'^(\d+)[一-鿿]', block.text)
+            if match and block.x < 130 and block.y >= 55:
+                actual_no = int(match.group(1))
                 question_starts.append(QuestionBoundary(
-                    question_no=next_no,
+                    question_no=actual_no,
                     page_start=block.page_num,
                     y_start=block.y,
                     page_end=0,
@@ -171,8 +179,17 @@ def detect_questions(doc: fitz.Document, chapter_num: int) -> List[QuestionBound
     for i in range(len(question_starts)):
         if i < len(question_starts) - 1:
             next_q = question_starts[i + 1]
-            question_starts[i].page_end = next_q.page_start
-            question_starts[i].y_end = next_q.y_start
+            curr_q = question_starts[i]
+            # If next question starts on a different page AND near the top of
+            # that page (y < 80), the current question ends on its own page.
+            # Don't extend the boundary to the next page — that would include
+            # the next question's header in the crop.
+            if next_q.page_start != curr_q.page_start and next_q.y_start < 80:
+                question_starts[i].page_end = curr_q.page_start
+                question_starts[i].y_end = 800  # Page bottom
+            else:
+                question_starts[i].page_end = next_q.page_start
+                question_starts[i].y_end = next_q.y_start
         else:
             question_starts[i].page_end = config["question_end"]
             question_starts[i].y_end = 800  # Approximate page bottom
@@ -231,7 +248,7 @@ def detect_answers(doc: fitz.Document, chapter_num: int) -> List[AnswerBoundary]
             if not found_chapter_header and pg_idx == config["answer_start"] - 1:
                 continue
 
-            if block.x >= 130:
+            if block.x >= 150:
                 continue
 
             # Try primary pattern: number + separator + 解/证
@@ -482,9 +499,17 @@ def generate_question_entry(
 def generate_questions_json(
     doc: fitz.Document,
     output_path: str
-) -> List[Dict]:
-    """Generate questions.json for all chapters."""
+) -> Tuple[List[Dict], Dict[int, List[QuestionBoundary]], Dict[int, List[AnswerBoundary]]]:
+    """Generate questions.json for all chapters.
+
+    Returns (all_questions, question_boundaries_by_chapter, answer_boundaries_by_chapter).
+    The boundary dicts are returned so the cropping loop can reuse them without
+    calling detect_questions() a second time (which is non-deterministic near
+    page boundaries).
+    """
     all_questions = []
+    q_boundaries_by_chapter: Dict[int, List[QuestionBoundary]] = {}
+    a_boundaries_by_chapter: Dict[int, List[AnswerBoundary]] = {}
 
     for chapter_num in range(1, 7):  # Chapters 1-6
         print(f"Processing chapter {chapter_num}...")
@@ -492,6 +517,9 @@ def generate_questions_json(
         # Detect questions and answers
         questions = detect_questions(doc, chapter_num)
         answers = detect_answers(doc, chapter_num)
+
+        q_boundaries_by_chapter[chapter_num] = questions
+        a_boundaries_by_chapter[chapter_num] = answers
 
         # Build answer lookup by question number
         answer_map = {a.question_no: a for a in answers}
@@ -503,14 +531,24 @@ def generate_questions_json(
                 entry = generate_question_entry(chapter_num, q, answer)
                 all_questions.append(entry)
             else:
-                print(f"Warning: No answer found for question {q.question_no} in chapter {chapter_num}")
+                # Include question even without detected answer — use page range as fallback
+                print(f"Warning: No answer found for question {q.question_no} in chapter {chapter_num} — using fallback")
+                fallback_answer = AnswerBoundary(
+                    question_no=q.question_no,
+                    page_start=q.page_start,
+                    y_start=q.y_start,
+                    page_end=q.page_end,
+                    y_end=q.y_end,
+                )
+                entry = generate_question_entry(chapter_num, q, fallback_answer)
+                all_questions.append(entry)
 
     # Save to file
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(all_questions, f, ensure_ascii=False, indent=2)
 
-    return all_questions
+    return all_questions, q_boundaries_by_chapter, a_boundaries_by_chapter
 
 
 def extract_book002(
@@ -531,7 +569,7 @@ def extract_book002(
 
     # Generate questions.json
     json_path = os.path.join(output_dir, "data", "questions.json")
-    questions = generate_questions_json(doc, json_path)
+    questions, q_boundaries, a_boundaries = generate_questions_json(doc, json_path)
 
     # Crop images for each question
     print("\nCropping question and answer images...")
@@ -544,22 +582,29 @@ def extract_book002(
         chapter_num = int(id_match.group(1))
         question_no = int(id_match.group(3))
 
-        # Get boundaries
-        questions_boundary = detect_questions(doc, chapter_num)
-        answers_boundary = detect_answers(doc, chapter_num)
+        # Get pre-computed boundaries (reuse first-pass results to avoid
+        # non-deterministic re-detection near page boundaries)
+        questions_boundary = q_boundaries.get(chapter_num, [])
+        answers_boundary = a_boundaries.get(chapter_num, [])
 
         # Find matching boundaries
         q_boundary = next((b for b in questions_boundary if b.question_no == question_no), None)
         a_boundary = next((b for b in answers_boundary if b.question_no == question_no), None)
 
-        if q_boundary and a_boundary:
+        if q_boundary:
             # Crop question image
             q_img_path = os.path.join(output_dir, q["questionImage"])
             crop_question_image(doc, q_boundary, q_img_path)
 
-            # Crop answer image
+            # Crop answer image (use question boundary as fallback when answer not detected)
             a_img_path = os.path.join(output_dir, q["answerImage"])
-            crop_answer_image(doc, a_boundary, a_img_path)
+            crop_answer_image(doc, a_boundary or AnswerBoundary(
+                question_no=q_boundary.question_no,
+                page_start=q_boundary.page_start,
+                y_start=q_boundary.y_start,
+                page_end=q_boundary.page_end,
+                y_end=q_boundary.y_end,
+            ), a_img_path)
 
             if (i + 1) % 10 == 0:
                 print(f"  Processed {i + 1}/{len(questions)} questions")
@@ -612,7 +657,7 @@ def extract_book002(
 if __name__ == "__main__":
     import sys
 
-    pdf_path = r"G:\1-考研资料\MATH\27武忠祥《高等数学辅导讲义.严选题》.pdf"
+    pdf_path = r"G:\AI_Projects\Mathloop_04\习题和答案\27武忠祥《高等数学辅导讲义.严选题》.pdf"
     output_dir = r"G:\AI_Projects\Mathloop_04\book\output"
 
     result = extract_book002(pdf_path, output_dir)
