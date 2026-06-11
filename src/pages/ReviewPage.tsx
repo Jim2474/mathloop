@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
+import { createReviewBackup, downloadReviewBackup } from "../services/backupService";
 import { isTauriRuntime } from "../services/desktopBridge";
+import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { DailyReviewSession, ReviewLog, ReviewQueueItem, ReviewRating } from "../types/review";
@@ -23,6 +25,8 @@ export default function ReviewPage() {
     cards,
     reviewLogs,
     mistakeRecords,
+    questionFingerprints,
+    lastSyncResult,
     settings,
     dailyReviewSession,
     getOrCreateDailyReviewSession,
@@ -31,12 +35,14 @@ export default function ReviewPage() {
     rateQuestion,
     updateSettings,
   } = useReviewStore();
+  const { activeBookId } = useBookStore();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [isBrowsingCompletedQueue, setIsBrowsingCompletedQueue] = useState(false);
   const [tipsDraft, setTipsDraft] = useState("");
   const [tipsMessage, setTipsMessage] = useState("");
   const [isSavingTips, setIsSavingTips] = useState(false);
+
 
   const upcomingMistakes = Object.values(mistakeRecords ?? {})
     .filter((record) => record.active)
@@ -82,6 +88,30 @@ export default function ReviewPage() {
       markDailyReviewSessionCompleted();
     }
   }, [isRoundComplete, markDailyReviewSessionCompleted]);
+
+  useEffect(() => {
+    if (
+      isComplete &&
+      dailyReviewSession?.completedAt &&
+      dailyReviewSession.roundId &&
+      !hasBackedUpRound(dailyReviewSession.roundId)
+    ) {
+      markRoundBackedUp(dailyReviewSession.roundId);
+      const backup = createReviewBackup(
+        cards,
+        reviewLogs,
+        settings,
+        mistakeRecords,
+        questionFingerprints ?? {},
+        lastSyncResult,
+        dailyReviewSession,
+        activeBookId,
+      );
+      downloadReviewBackup(backup);
+      localStorage.setItem("mathloop-last-backup-time", new Date().toISOString());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on completion state changes, not on every store update
+  }, [isComplete, dailyReviewSession?.completedAt, dailyReviewSession?.roundId]);
 
   useEffect(() => {
     setTipsDraft(currentQuestion?.tips ?? "");
@@ -563,4 +593,33 @@ function getDailyReviewOptions(currentValue: number): number[] {
 
 function getQuestionLocator(question: { printedPageNumber?: string; questionNo: string }): string {
   return `印刷页 ${question.printedPageNumber || "未标注"} · 第 ${question.questionNo} 题`;
+}
+
+const BACKED_UP_ROUNDS_KEY = "mathloop-backed-up-rounds";
+const MAX_BACKED_UP_ROUNDS = 20;
+
+function hasBackedUpRound(roundId: string): boolean {
+  try {
+    const raw = localStorage.getItem(BACKED_UP_ROUNDS_KEY);
+    const rounds: string[] = raw ? JSON.parse(raw) : [];
+    return rounds.includes(roundId);
+  } catch {
+    return false;
+  }
+}
+
+function markRoundBackedUp(roundId: string): void {
+  try {
+    const raw = localStorage.getItem(BACKED_UP_ROUNDS_KEY);
+    const rounds: string[] = raw ? JSON.parse(raw) : [];
+    if (!rounds.includes(roundId)) {
+      rounds.push(roundId);
+      while (rounds.length > MAX_BACKED_UP_ROUNDS) {
+        rounds.shift();
+      }
+    }
+    localStorage.setItem(BACKED_UP_ROUNDS_KEY, JSON.stringify(rounds));
+  } catch {
+    // localStorage unavailable — ignore
+  }
 }
