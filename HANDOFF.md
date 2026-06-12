@@ -8,6 +8,22 @@
 
 ---
 
+## 整体状态
+
+**业务逻辑层面没有大问题**。复习队列生成、FSRS 评分、错题管理、多书本切换等核心流程均正常。已修复唯一的逻辑 Bug（备份重复下载）。
+
+**剩余全部是数据层面的问题**，可以慢慢修：
+
+| 待办 | 类型 | 说明 |
+|------|------|------|
+| Book1 tips 恢复 | 数据恢复 | 从 66 个备份合并 29 条笔记写回 questions.json |
+| Web 端 tips 保存 | 功能补全 | 移除 isTauriRuntime() 拦截 + localStorage 存储 |
+| Book2 答案缺失 58 题 | 数据提取 | 修 extract_book002.py 后重跑 |
+| Book3 答案可疑 13 题 | 数据核对 | 先人工核对，有问题再重跑 |
+| addBook 按钮 | UI 适配 | 隐藏 Web 端不可用的按钮 |
+
+---
+
 ## 已修复 ✅
 
 ### 备份重复下载
@@ -20,6 +36,48 @@
 - 依赖数组包含 12 个对象引用（cards, reviewLogs 等），每次 store 变化都会重新触发
 - 修复：用 localStorage（`mathloop-backed-up-rounds`）替代 useRef，依赖数组精简为 3 个原始值
 - 新增 `hasBackedUpRound()` / `markRoundBackedUp()` 辅助函数（文件末尾，第 598-625 行）
+
+---
+
+## 桌面 App 打包方案
+
+### 结论：不需要 Electron，项目本身就是 Tauri 应用
+
+这个项目从一开始就是用 **Tauri 2.x** 构建的桌面应用，所有基础设施都已就绪：
+
+| 组件 | 状态 |
+|------|------|
+| Tauri CLI + 配置 | ✅ `src-tauri/tauri.conf.json` |
+| Rust 后端（1099 行） | ✅ `src-tauri/src/main.rs` |
+| SQLite 持久化 + 迁移 v1→v3 | ✅ |
+| Tips 文件读写 | ✅ `update_question_tips` 命令 |
+| 自动备份 + 备份清理 | ✅ `create_startup_backup` + `prune_backups` |
+| 多书本注册/切换 | ✅ book-registry + books/ 目录 |
+| 已有可执行文件 | ✅ `MathLoop.exe`（589 MB） |
+
+### 打包步骤
+
+```bash
+# 1. 确保 Rust 工具链
+rustup update stable
+
+# 2. 一键构建（会先 vite build 再 cargo build --release）
+npm run tauri:build
+
+# 3. 产物位置
+#    Windows MSI:  src-tauri/target/release/bundle/msi/
+#    Windows NSIS: src-tauri/target/release/bundle/nsis/
+```
+
+### 注意事项
+
+1. **Web 端改动不影响桌面端**：代码中通过 `isTauriRuntime()` 区分环境。桌面端走 Tauri invoke 路径（SQLite + 文件系统），Web 端走 localStorage 路径。两套代码互不干扰。
+
+2. **打包体积大**：当前 exe 是 589 MB，因为内嵌了所有书本的图片资源。如果后续添加更多书本，体积会继续增长。可考虑将图片作为外部资源不嵌入。
+
+3. **数据不互通**：桌面端数据在 `%APPDATA%\MathLoop\`（SQLite），Web 端在浏览器 localStorage。两个版本的复习进度互不同步。如果切换到桌面端使用，需要先在 Web 端导出备份 JSON，然后在桌面端导入。
+
+4. **AI 调试桌面端确实困难**：Tauri 构建需要完整的 Rust 编译环境，构建时间长，Rust 报错信息对 AI 不太友好。如果日常使用 Web 端没问题，建议继续用 Web 端，桌面端作为数据归档/tips 写入的补充工具。
 
 ---
 
@@ -103,7 +161,7 @@ g:\AI_Projects\Mathloop_04\book\extract_book002.py
    cd book
    python extract_book002.py
    ```
-5. 检查输出到 `public/books/book002/` 的新 questions.json 和答案图片
+5. 检查输出到 `public\books\book002\` 的新 questions.json 和答案图片
 6. 对比前后 answerImage 为空的数量
 
 **需要**：原始 PDF 文件、PyMuPDF (fitz) 库
