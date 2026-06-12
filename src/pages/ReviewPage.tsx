@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
 import { createReviewBackup, downloadReviewBackup } from "../services/backupService";
-import { isTauriRuntime } from "../services/desktopBridge";
 import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
@@ -20,7 +19,7 @@ import { ratingLabels } from "../utils/reviewLabels";
 const ratings: ReviewRating[] = ["Again", "Hard", "Good", "Easy"];
 
 export default function ReviewPage() {
-  const { questions, isLoading, error, saveQuestionTips } = useQuestionStore();
+  const { questions, isLoading, error, saveQuestionTips, getEffectiveTips } = useQuestionStore();
   const {
     cards,
     reviewLogs,
@@ -114,10 +113,11 @@ export default function ReviewPage() {
   }, [isComplete, dailyReviewSession?.completedAt, dailyReviewSession?.roundId]);
 
   useEffect(() => {
-    setTipsDraft(currentQuestion?.tips ?? "");
+    setTipsDraft(currentQuestion ? getEffectiveTips(currentQuestion.id) : "");
     setTipsMessage("");
     setIsSavingTips(false);
-  }, [currentQuestion?.id, currentQuestion?.tips]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getEffectiveTips is stable
+  }, [currentQuestion?.id, currentQuestion?.tips, getEffectiveTips]);
 
   function handleRating(rating: ReviewRating) {
     if (!currentQuestion || !dailyReviewSession) {
@@ -183,10 +183,6 @@ export default function ReviewPage() {
 
   async function handleSaveTips() {
     if (!currentQuestion) {
-      return;
-    }
-    if (!isTauriRuntime()) {
-      setTipsMessage("浏览器开发模式不能直接写入题库；请在 MathLoop 桌面版中保存解题思路。");
       return;
     }
     setIsSavingTips(true);

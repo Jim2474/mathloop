@@ -10,7 +10,7 @@ import { stateLabel } from "../utils/reviewLabels";
 
 export default function QuestionDetailPage() {
   const { id } = useParams();
-  const { questions, isLoading, error } = useQuestionStore();
+  const { questions, isLoading, error, getEffectiveTips } = useQuestionStore();
   const { cards, getQuestionLogs, mistakeRecords } = useReviewStore();
   const question = questions.find((item) => item.id === id);
 
@@ -105,7 +105,7 @@ export default function QuestionDetailPage() {
       <section className="apple-tile rounded-[26px] p-6">
         <h3 className="text-2xl font-semibold tracking-[-0.28px]">解题思路</h3>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink/62">
-          {question.tips?.trim() || "这道题还没有记录思路。复习时可以在查看答案区域随手写下解题思路。"}
+          {(question.id ? getEffectiveTips(question.id) : question.tips?.trim()) || "这道题还没有记录思路。复习时可以在查看答案区域随手写下解题思路。"}
         </p>
       </section>
 
