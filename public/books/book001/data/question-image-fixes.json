@@ -1,0 +1,56 @@
+{
+  "book001_ch02_p020_q006": {
+    "fixedImage": "question-fixes/book001_ch02_p020_q006_fix.png",
+    "reason": "原始裁切主要显示上一题答案区，漏掉第 6 题题干。",
+    "source": "page_020.png:[0, 1080, 1190, 1560]",
+    "verified": true
+  },
+  "book001_ch01_p013_q006": {
+    "fixedImage": "question-fixes/book001_ch01_p013_q006_fix.png",
+    "reason": "原始裁切主要显示第 5 题答题区，第 6 题题干只露出一小段。",
+    "source": "page_013.png:[0, 1180, 1190, 1505]",
+    "verified": true
+  },
+  "book001_ch01_p014_q009": {
+    "fixedImage": "question-fixes/book001_ch01_p014_q009_fix.png",
+    "reason": "审计发现原始图文字密度偏低，收紧为第 9 题单题区域。",
+    "source": "page_014.png:[0, 890, 1190, 1225]",
+    "verified": true
+  },
+  "book001_ch02_p023_q004": {
+    "fixedImage": "question-fixes/book001_ch02_p023_q004_fix.png",
+    "reason": "原始裁切落在第 3 题答题区，实际第 4 题在下一段。",
+    "source": "page_023.png:[0, 500, 1190, 765]",
+    "verified": true
+  },
+  "book001_ch02_p023_q005": {
+    "fixedImage": "question-fixes/book001_ch02_p023_q005_fix.png",
+    "reason": "原始裁切显示第 4 题，逐题裁切整体错后一段。",
+    "source": "page_023.png:[0, 870, 1190, 1145]",
+    "verified": true
+  },
+  "book001_ch02_p023_q006": {
+    "fixedImage": "question-fixes/book001_ch02_p023_q006_fix.png",
+    "reason": "原始裁切只显示第 4 题答题区，复习页看不到第 6 题题干。",
+    "source": "page_023.png:[0, 1208, 1190, 1425]",
+    "verified": true
+  },
+  "book001_ch05_p048_q004": {
+    "fixedImage": "question-fixes/book001_ch05_p048_q004_fix.png",
+    "reason": "原始裁切只显示第 4 题下沿。",
+    "source": "page_048.png:[0, 420, 1190, 760]",
+    "verified": true
+  },
+  "book001_ch01_p017_q009": {
+    "fixedImage": "question-fixes/book001_ch01_p017_q009_fix.png",
+    "reason": "原始裁切上半部分为空白记录区，题干落在图片底部。",
+    "source": "page_017.png:[0, 1035, 1190, 1320]",
+    "verified": true
+  },
+  "book001_ch05_p048_q006": {
+    "fixedImage": "question-fixes/book001_ch05_p048_q006_fix.png",
+    "reason": "原始裁切被第 5 题空白记录区占据。",
+    "source": "page_048.png:[0, 1110, 1190, 1500]",
+    "verified": true
+  }
+}
