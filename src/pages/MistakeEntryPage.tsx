@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionThumbnail from "../components/question/QuestionThumbnail";
+import PasteImageEntry from "../components/question/PasteImageEntry";
 import {
   findQuestionsByPageAndNumber,
   getQuestionLookupLabel,
@@ -316,6 +317,9 @@ export default function MistakeEntryPage() {
           </Link>
         </div>
       </section>
+
+      {/* Screenshot paste entry */}
+      <PasteImageEntry />
 
       <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-5">

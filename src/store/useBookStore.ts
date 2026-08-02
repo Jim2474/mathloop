@@ -10,6 +10,7 @@ import {
   initializeDesktopRuntime,
   isTauriRuntime,
 } from "../services/desktopBridge";
+import { getCustomBooks, addCustomBook, removeCustomBook } from "../services/webBookService";
 
 const ACTIVE_BOOK_KEY = "mathloop-active-book";
 const BOOKS_MANIFEST_URL = "/books.json";
@@ -22,7 +23,7 @@ type BookState = {
   isLoaded: boolean;
   loadBooks: () => Promise<void>;
   switchBook: (bookId: string) => Promise<void>;
-  addBook: (bookId: string, name: string) => Promise<BookEntry>;
+  addBook: (bookId: string, name: string, questions?: unknown[]) => Promise<BookEntry>;
   removeBook: (bookId: string) => Promise<void>;
 };
 
@@ -41,11 +42,17 @@ export const useBookStore = create<BookState>()(
             if (response.ok) {
               const data: unknown = await response.json();
               if (Array.isArray(data)) {
-                const books = data as BookEntry[];
-                set({ books, isLoaded: true });
-                // Auto-select default book if none is active
-                if (!get().activeBookId && books.length > 0) {
-                  const defaultBook = books.find((b) => b.id === DEFAULT_BOOK_ID) ?? books[0];
+                const builtinBooks = data as BookEntry[];
+                const customBooks = getCustomBooks();
+                // Merge: built-in first, then custom (deduplicated by id)
+                const seen = new Set(builtinBooks.map((b) => b.id));
+                const merged = [
+                  ...builtinBooks,
+                  ...customBooks.filter((b) => !seen.has(b.id)),
+                ];
+                set({ books: merged, isLoaded: true });
+                if (!get().activeBookId && merged.length > 0) {
+                  const defaultBook = merged.find((b) => b.id === DEFAULT_BOOK_ID) ?? merged[0];
                   set({ activeBookId: defaultBook.id });
                 }
                 return;
@@ -83,9 +90,17 @@ export const useBookStore = create<BookState>()(
         }
       },
 
-      addBook: async (bookId: string, name: string) => {
+      addBook: async (bookId: string, name: string, questions?: unknown[]) => {
         if (!isTauriRuntime()) {
-          throw new Error("浏览器模式暂不支持添加书本。");
+          // Web mode: store in IndexedDB via webBookService
+          // questions must be provided for web mode
+          const entry = await addCustomBook(
+            bookId,
+            name,
+            (questions ?? []) as import("../types/question").Question[],
+          );
+          set((state) => ({ books: [...state.books, entry] }));
+          return entry;
         }
         const entry = await addDesktopBook(bookId, name);
         set((state) => ({ books: [...state.books, entry] }));
@@ -94,7 +109,12 @@ export const useBookStore = create<BookState>()(
 
       removeBook: async (bookId: string) => {
         if (!isTauriRuntime()) {
-          throw new Error("浏览器模式暂不支持移除书本。");
+          await removeCustomBook(bookId);
+          set((state) => ({
+            books: state.books.filter((b) => b.id !== bookId),
+            activeBookId: state.activeBookId === bookId ? null : state.activeBookId,
+          }));
+          return;
         }
         await removeDesktopBook(bookId);
         set((state) => ({

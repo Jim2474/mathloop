@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { isTauriRuntime, loadDesktopAssetDataUrl } from "../services/desktopBridge";
+import { getCustomQuestionImageUrl } from "../services/customQuestionService";
 import { getActiveBookId } from "../utils/bookId";
 
 type AssetUrlState = {
@@ -22,6 +23,20 @@ export function useAssetUrl(path: string | undefined): AssetUrlState {
 
     if (!normalizedPath) {
       setState({ status: "idle", url: "" });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Handle custom:// protocol (user-pasted screenshots stored in IndexedDB)
+    if (normalizedPath.startsWith("custom://")) {
+      const questionId = normalizedPath.slice("custom://".length);
+      setState({ status: "loading", url: "" });
+      void getCustomQuestionImageUrl(questionId).then((url) => {
+        if (!cancelled) {
+          setState(url ? { status: "loaded", url } : { status: "error", url: "" });
+        }
+      });
       return () => {
         cancelled = true;
       };
@@ -72,6 +87,10 @@ export function useAssetUrl(path: string | undefined): AssetUrlState {
 function createInitialState(path: string): AssetUrlState {
   if (!path) {
     return { status: "idle", url: "" };
+  }
+  // custom:// images load asynchronously from IndexedDB — always start as loading
+  if (path.startsWith("custom://")) {
+    return { status: "loading", url: "" };
   }
   if (!isTauriRuntime()) {
     return { status: "loaded", url: toBrowserAssetUrl(path) };

@@ -2,12 +2,22 @@ import type { Question } from "../types/question";
 import { setQuestionImageFixes } from "../utils/questionImages";
 import { getActiveBookId } from "../utils/bookId";
 import { initializeDesktopRuntime, invokeDesktop, isTauriRuntime } from "./desktopBridge";
+import { getCustomQuestions } from "./customQuestionService";
+import { isCustomBook, loadCustomBookQuestions } from "./webBookService";
 
 const DEFAULT_QUESTIONS_URL = "/data/questions.json";
 const DEFAULT_QUESTION_IMAGE_FIXES_URL = "/data/question-image-fixes.json";
 
 export async function loadOpenClawQuestions(): Promise<Question[]> {
   const bookId = getActiveBookId();
+
+  // Custom (user-uploaded) books load from IndexedDB
+  if (!isTauriRuntime() && bookId && isCustomBook(bookId)) {
+    const questions = await loadCustomBookQuestions(bookId);
+    // Also merge screenshot questions for this book
+    const customQ = getCustomQuestions(bookId);
+    return [...questions, ...customQ];
+  }
 
   if (isTauriRuntime()) {
     await initializeDesktopRuntime(bookId ?? undefined);
@@ -39,7 +49,11 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
   }
 
   setQuestionImageFixes(await loadQuestionImageFixes(bookId));
-  return data as Question[];
+
+  // Merge screenshot questions for this book
+  const baseQuestions = data as Question[];
+  const customQ = bookId ? getCustomQuestions(bookId) : [];
+  return [...baseQuestions, ...customQ];
 }
 
 async function loadDesktopQuestionImageFixes(bookId: string | null): Promise<Record<string, string>> {
