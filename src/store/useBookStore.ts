@@ -10,7 +10,12 @@ import {
   initializeDesktopRuntime,
   isTauriRuntime,
 } from "../services/desktopBridge";
-import { getCustomBooks, addCustomBook, removeCustomBook, isCustomBook } from "../services/webBookService";
+import {
+  getCustomBooks,
+  getCustomBooksAsync,
+  addCustomBook,
+  removeCustomBook,
+} from "../services/webBookService";
 
 const ACTIVE_BOOK_KEY = "mathloop-active-book";
 const BOOKS_MANIFEST_URL = "/books.json";
@@ -21,6 +26,8 @@ type BookState = {
   activeBookId: string | null;
   isSwitching: boolean;
   isLoaded: boolean;
+  /** In-memory set of custom (screenshot-only) book IDs — do NOT rely on localStorage for this */
+  customBookIds: Set<string>;
   loadBooks: () => Promise<void>;
   switchBook: (bookId: string) => Promise<void>;
   addBook: (bookId: string, name: string, questions?: unknown[]) => Promise<BookEntry>;
@@ -34,23 +41,29 @@ export const useBookStore = create<BookState>()(
       activeBookId: null,
       isSwitching: false,
       isLoaded: false,
+      customBookIds: new Set<string>(),
 
       loadBooks: async () => {
         if (!isTauriRuntime()) {
+          // ── Web mode ──────────────────────────────────────────────────
           try {
             const response = await fetch(BOOKS_MANIFEST_URL, { cache: "no-cache" });
             if (response.ok) {
               const data: unknown = await response.json();
               if (Array.isArray(data)) {
                 const builtinBooks = data as BookEntry[];
+                // Web: use sync read (localStorage always works in browsers)
                 const customBooks = getCustomBooks();
-                // Merge: built-in first, then custom (deduplicated by id)
                 const seen = new Set(builtinBooks.map((b) => b.id));
                 const merged = [
                   ...builtinBooks,
                   ...customBooks.filter((b) => !seen.has(b.id)),
                 ];
-                set({ books: merged, isLoaded: true });
+                set({
+                  books: merged,
+                  isLoaded: true,
+                  customBookIds: new Set(customBooks.map((b) => b.id)),
+                });
                 if (!get().activeBookId && merged.length > 0) {
                   const defaultBook = merged.find((b) => b.id === DEFAULT_BOOK_ID) ?? merged[0];
                   set({ activeBookId: defaultBook.id });
@@ -61,21 +74,40 @@ export const useBookStore = create<BookState>()(
           } catch {
             // Fall through to empty state
           }
-          set({ books: [], isLoaded: true });
+          set({ books: [], isLoaded: true, customBookIds: new Set() });
           return;
         }
+
+        // ── Tauri mode ────────────────────────────────────────────────
+        // Use async fallback to recover custom books from IndexedDB if localStorage
+        // was cleared between sessions (can happen in WKWebView on some systems).
         try {
-          const desktopBooks = await listDesktopBooks();
-          const customBooks = getCustomBooks();
-          // Merge: desktop (built-in) books first, then custom (screenshot-only) books
+          const [desktopBooks, customBooks] = await Promise.all([
+            listDesktopBooks(),
+            getCustomBooksAsync(), // localStorage first, IndexedDB fallback
+          ]);
           const seen = new Set(desktopBooks.map((b) => b.id));
           const merged = [
             ...desktopBooks,
             ...customBooks.filter((b) => !seen.has(b.id)),
           ];
-          set({ books: merged, isLoaded: true });
+          set({
+            books: merged,
+            isLoaded: true,
+            customBookIds: new Set(customBooks.map((b) => b.id)),
+          });
         } catch {
-          set({ books: [], isLoaded: true });
+          // Even if Rust fails, try to load at least the custom books
+          try {
+            const customBooks = await getCustomBooksAsync();
+            set({
+              books: customBooks,
+              isLoaded: true,
+              customBookIds: new Set(customBooks.map((b) => b.id)),
+            });
+          } catch {
+            set({ books: [], isLoaded: true, customBookIds: new Set() });
+          }
         }
       },
 
@@ -85,11 +117,14 @@ export const useBookStore = create<BookState>()(
 
         set({ isSwitching: true });
         try {
-          if (isTauriRuntime() && !isCustomBook(bookId)) {
-            // Only call the Rust backend for real disk-based books.
-            // For custom (screenshot-only) books stored in localStorage/IndexedDB,
-            // we must NOT call resetDesktopRuntime() — that clears desktopDataDir
-            // and breaks image loading for ALL books until the next successful bootstrap.
+          // Check the in-memory Set — NOT localStorage — to determine if this is a
+          // custom (screenshot-only) book. The Set is populated on loadBooks() and addBook().
+          const isCustom = get().customBookIds.has(bookId);
+
+          if (isTauriRuntime() && !isCustom) {
+            // Only call the Rust backend for built-in disk-based books.
+            // NEVER call resetDesktopRuntime() for custom books — it clears desktopDataDir
+            // and breaks ALL image loading until a successful bootstrap.
             resetDesktopRuntime();
             await setActiveDesktopBook(bookId);
             await initializeDesktopRuntime(bookId);
@@ -102,46 +137,37 @@ export const useBookStore = create<BookState>()(
       },
 
       addBook: async (bookId: string, name: string, questions?: unknown[]) => {
-        if (!isTauriRuntime()) {
-          // Web mode: always use localStorage + IndexedDB
-          const entry = await addCustomBook(
-            bookId,
-            name,
-            (questions ?? []) as import("../types/question").Question[],
-          );
-          set((state) => ({ books: [...state.books, entry] }));
+        // Always use addCustomBook (localStorage + IndexedDB) for custom/empty books.
+        // questions param is provided by the AddBookDialog for all custom books
+        // (including in Tauri mode — fixed in Navbar to always pass questions ?? []).
+        const asQuestions = (questions ?? []) as import("../types/question").Question[];
+
+        if (!isTauriRuntime() || questions !== undefined) {
+          const entry = await addCustomBook(bookId, name, asQuestions);
+          set((state) => ({
+            books: [...state.books, entry],
+            customBookIds: new Set([...state.customBookIds, entry.id]),
+          }));
           return entry;
         }
-        // Tauri mode: if questions param provided it's a screenshot-only book → use localStorage
-        // so it doesn't need a questions.json file on disk
-        if (questions !== undefined) {
-          const entry = await addCustomBook(
-            bookId,
-            name,
-            questions as import("../types/question").Question[],
-          );
-          set((state) => ({ books: [...state.books, entry] }));
-          return entry;
-        }
-        // Tauri mode, no questions provided: it's a real disk-based book
+
+        // Tauri mode with no questions param: real disk-based book (advanced use case)
         const entry = await addDesktopBook(bookId, name);
         set((state) => ({ books: [...state.books, entry] }));
         return entry;
       },
 
       removeBook: async (bookId: string) => {
-        if (!isTauriRuntime()) {
+        const isCustom = get().customBookIds.has(bookId);
+        if (!isTauriRuntime() || isCustom) {
           await removeCustomBook(bookId);
-          set((state) => ({
-            books: state.books.filter((b) => b.id !== bookId),
-            activeBookId: state.activeBookId === bookId ? null : state.activeBookId,
-          }));
-          return;
+        } else {
+          await removeDesktopBook(bookId);
         }
-        await removeDesktopBook(bookId);
         set((state) => ({
           books: state.books.filter((b) => b.id !== bookId),
           activeBookId: state.activeBookId === bookId ? null : state.activeBookId,
+          customBookIds: new Set([...state.customBookIds].filter((id) => id !== bookId)),
         }));
       },
     }),

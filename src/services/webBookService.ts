@@ -57,7 +57,7 @@ async function dbBooksGet(key: string): Promise<string | null> {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Get the list of all custom books added by the user.
+ * Get the list of all custom books (sync, from localStorage).
  */
 export function getCustomBooks(): BookEntry[] {
   try {
@@ -71,6 +71,30 @@ export function getCustomBooks(): BookEntry[] {
 }
 
 /**
+ * Get the list of all custom books (async, with IndexedDB fallback).
+ * Use this on app startup to reliably recover the list even if localStorage
+ * was cleared between sessions (can happen in Tauri WKWebView on some systems).
+ */
+export async function getCustomBooksAsync(): Promise<BookEntry[]> {
+  const fromLS = getCustomBooks();
+  if (fromLS.length > 0) return fromLS;
+  // Fallback: read the manifest backup from IndexedDB
+  try {
+    const raw = await dbBooksGet("__manifest__");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Restore into localStorage so future sync reads work
+      localStorage.setItem(CUSTOM_BOOKS_LS_KEY, raw);
+      return parsed as BookEntry[];
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+/**
  * Check if a book ID belongs to a custom (user-added) book.
  */
 export function isCustomBook(bookId: string): boolean {
@@ -78,8 +102,8 @@ export function isCustomBook(bookId: string): boolean {
 }
 
 /**
- * Add a new custom book. Saves questions to IndexedDB, metadata to localStorage.
- * Throws if the book ID already exists.
+ * Add a new custom book. Saves questions to IndexedDB, metadata to both
+ * localStorage and IndexedDB (for cross-session resilience).
  */
 export async function addCustomBook(
   bookId: string,
@@ -94,10 +118,12 @@ export async function addCustomBook(
   // Save questions to IndexedDB
   await dbBooksPut(`questions::${bookId}`, JSON.stringify(questions));
 
-  // Save metadata to localStorage
+  // Save metadata to localStorage AND IndexedDB (dual-write for resilience)
   const entry: BookEntry = { id: bookId, name, addedAt: new Date().toISOString() };
   const updated = [...existing, entry];
-  localStorage.setItem(CUSTOM_BOOKS_LS_KEY, JSON.stringify(updated));
+  const manifestJson = JSON.stringify(updated);
+  localStorage.setItem(CUSTOM_BOOKS_LS_KEY, manifestJson);
+  await dbBooksPut("__manifest__", manifestJson); // IndexedDB backup
 
   return entry;
 }

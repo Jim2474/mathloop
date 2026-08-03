@@ -160,12 +160,9 @@ function AddBookDialog({
     const trimmedId = bookId.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     const trimmedName = name.trim();
     if (!trimmedId || !trimmedName) return;
-    if (!isWeb) {
-      // Desktop: needs file already copied to directory
-      onConfirm(trimmedId, trimmedName);
-      return;
-    }
-    // Web: create with questions array (may be empty — that's fine, user will paste screenshots)
+    // Always pass questions (empty array for screenshot-only books).
+    // This ensures addBook() uses localStorage + IndexedDB on BOTH web and Tauri,
+    // so the book persists across restarts and switchBook() works immediately.
     onConfirm(trimmedId, trimmedName, questions ?? []);
   }
 
@@ -182,7 +179,9 @@ function AddBookDialog({
           </p>
         ) : (
           <p className="mt-2 text-sm text-ink/60">
-            请先将 questions.json 放到桌面数据目录的 books\&lt;书本ID&gt;\data\ 目录下。
+            建一个空书本，之后直接在错题录入页用{" "}
+            <kbd className="rounded bg-black/8 px-1 text-xs font-semibold">Ctrl+V</kbd>{" "}
+            粘贴截图录入错题。
           </p>
         )}
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
