@@ -168,7 +168,11 @@ fn load_questions_json<R: Runtime>(
                 return fs::read_to_string(path).map_err(to_string);
             }
             // Fallback to resource — use book-scoped path
-            read_external_or_resource_file(&app, &format!("books/{}/data/questions.json", bid))
+            match read_external_or_resource_file(&app, &format!("books/{}/data/questions.json", bid)) {
+                Ok(content) => Ok(content),
+                // No questions.json found for this book (e.g. a screenshot-only custom book) — return empty array
+                Err(_) => Ok("[]".to_string()),
+            }
         }
         None => read_external_or_resource_file(&app, "data/questions.json"),
     }

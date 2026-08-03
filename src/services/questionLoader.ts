@@ -11,8 +11,9 @@ const DEFAULT_QUESTION_IMAGE_FIXES_URL = "/data/question-image-fixes.json";
 export async function loadOpenClawQuestions(): Promise<Question[]> {
   const bookId = getActiveBookId();
 
-  // Custom (user-uploaded) books load from IndexedDB
-  if (!isTauriRuntime() && bookId && isCustomBook(bookId)) {
+  // Custom books (screenshot-only, registered in localStorage) load from IndexedDB
+  // This works in both web and Tauri (WKWebView supports localStorage + IndexedDB)
+  if (bookId && isCustomBook(bookId)) {
     const questions = await loadCustomBookQuestions(bookId);
     // Also merge screenshot questions for this book
     const customQ = getCustomQuestions(bookId);

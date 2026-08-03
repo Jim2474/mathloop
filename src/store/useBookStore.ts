@@ -65,8 +65,15 @@ export const useBookStore = create<BookState>()(
           return;
         }
         try {
-          const books = await listDesktopBooks();
-          set({ books, isLoaded: true });
+          const desktopBooks = await listDesktopBooks();
+          const customBooks = getCustomBooks();
+          // Merge: desktop (built-in) books first, then custom (screenshot-only) books
+          const seen = new Set(desktopBooks.map((b) => b.id));
+          const merged = [
+            ...desktopBooks,
+            ...customBooks.filter((b) => !seen.has(b.id)),
+          ];
+          set({ books: merged, isLoaded: true });
         } catch {
           set({ books: [], isLoaded: true });
         }
@@ -92,8 +99,7 @@ export const useBookStore = create<BookState>()(
 
       addBook: async (bookId: string, name: string, questions?: unknown[]) => {
         if (!isTauriRuntime()) {
-          // Web mode: store in IndexedDB via webBookService
-          // questions must be provided for web mode
+          // Web mode: always use localStorage + IndexedDB
           const entry = await addCustomBook(
             bookId,
             name,
@@ -102,6 +108,18 @@ export const useBookStore = create<BookState>()(
           set((state) => ({ books: [...state.books, entry] }));
           return entry;
         }
+        // Tauri mode: if questions param provided it's a screenshot-only book → use localStorage
+        // so it doesn't need a questions.json file on disk
+        if (questions !== undefined) {
+          const entry = await addCustomBook(
+            bookId,
+            name,
+            questions as import("../types/question").Question[],
+          );
+          set((state) => ({ books: [...state.books, entry] }));
+          return entry;
+        }
+        // Tauri mode, no questions provided: it's a real disk-based book
         const entry = await addDesktopBook(bookId, name);
         set((state) => ({ books: [...state.books, entry] }));
         return entry;
