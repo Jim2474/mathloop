@@ -98,7 +98,14 @@ export async function getCustomBooksAsync(): Promise<BookEntry[]> {
  * Check if a book ID belongs to a custom (user-added) book.
  */
 export function isCustomBook(bookId: string): boolean {
-  return getCustomBooks().some((b) => b.id === bookId);
+  if (getCustomBooks().some((b) => b.id === bookId)) return true;
+  try {
+    const raw = localStorage.getItem(CUSTOM_BOOKS_LS_KEY);
+    if (raw && raw.includes(`"${bookId}"`)) return true;
+  } catch {
+    // ignore
+  }
+  return false;
 }
 
 /**

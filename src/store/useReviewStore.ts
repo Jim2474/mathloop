@@ -177,13 +177,11 @@ export const useReviewStore = create<ReviewState>()(
         const dateKey = getLocalDateKey(now);
         const existing = state.dailyReviewSession;
 
-        // Reuse session only if it's for the SAME date AND the SAME book.
-        // Without the bookId check, switching books reuses the wrong book's
-        // question IDs in the queue, causing "队列题目不存在" errors.
-        const sessionMatchesBook =
-          !activeBookId ||
-          !existing?.bookId ||
-          existing.bookId === activeBookId;
+        // Reuse session ONLY if activeBookId matches existing.bookId exactly.
+        // If bookId is missing or doesn't match, force a fresh queue generation for activeBookId.
+        const sessionMatchesBook = Boolean(
+          activeBookId && existing?.bookId && existing.bookId === activeBookId,
+        );
 
         if (existing?.dateKey === dateKey && sessionMatchesBook) {
           if (existing.queue.length === 0) {
@@ -333,6 +331,8 @@ export const useReviewStore = create<ReviewState>()(
               ...state.mistakeRecords,
               [question.id]: record,
             },
+            // Reset dailyReviewSession so navigating to /review generates a fresh queue including this new mistake
+            dailyReviewSession: null,
           };
         });
 
@@ -382,7 +382,7 @@ export const useReviewStore = create<ReviewState>()(
           }
           mistakeRecords[toQuestionId] = nextRecord;
 
-          return { mistakeRecords };
+          return { mistakeRecords, dailyReviewSession: null };
         });
 
         return nextRecord;
@@ -401,6 +401,7 @@ export const useReviewStore = create<ReviewState>()(
                 active: false,
               },
             },
+            dailyReviewSession: null,
           };
         }),
       updateSettings: (settings) =>
@@ -572,10 +573,11 @@ function applyStoredReviewState(stored: string | null | undefined) {
     } catch {
       useReviewStore.setState(emptyState);
     }
+  } else {
+    // When stored is null/undefined (e.g. newly created book with no saved review state),
+    // we MUST reset to emptyState so the new book doesn't inherit cards/mistakes from the previous book.
+    useReviewStore.setState(emptyState);
   }
-  // DO NOT wipe state when stored is null/undefined.
-  // The store may already have valid in-memory state from a previous load
-  // or from syncQuestionLibrary. Wiping to empty loses user data.
 }
 
 useBookStore.subscribe((state) => {
