@@ -29,7 +29,9 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
     }
 
     setQuestionImageFixes(await loadDesktopQuestionImageFixes(bookId));
-    return data as Question[];
+    // Also merge any pasted screenshot questions for this book (stored in IndexedDB)
+    const customQ = bookId ? getCustomQuestions(bookId) : [];
+    return [...(data as Question[]), ...customQ];
   }
 
   const questionsUrl = bookId

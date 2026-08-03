@@ -95,7 +95,7 @@ export async function addCustomBook(
   await dbBooksPut(`questions::${bookId}`, JSON.stringify(questions));
 
   // Save metadata to localStorage
-  const entry: BookEntry = { id: bookId, name };
+  const entry: BookEntry = { id: bookId, name, addedAt: new Date().toISOString() };
   const updated = [...existing, entry];
   localStorage.setItem(CUSTOM_BOOKS_LS_KEY, JSON.stringify(updated));
 
