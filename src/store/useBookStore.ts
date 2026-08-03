@@ -10,7 +10,7 @@ import {
   initializeDesktopRuntime,
   isTauriRuntime,
 } from "../services/desktopBridge";
-import { getCustomBooks, addCustomBook, removeCustomBook } from "../services/webBookService";
+import { getCustomBooks, addCustomBook, removeCustomBook, isCustomBook } from "../services/webBookService";
 
 const ACTIVE_BOOK_KEY = "mathloop-active-book";
 const BOOKS_MANIFEST_URL = "/books.json";
@@ -85,7 +85,11 @@ export const useBookStore = create<BookState>()(
 
         set({ isSwitching: true });
         try {
-          if (isTauriRuntime()) {
+          if (isTauriRuntime() && !isCustomBook(bookId)) {
+            // Only call the Rust backend for real disk-based books.
+            // For custom (screenshot-only) books stored in localStorage/IndexedDB,
+            // we must NOT call resetDesktopRuntime() — that clears desktopDataDir
+            // and breaks image loading for ALL books until the next successful bootstrap.
             resetDesktopRuntime();
             await setActiveDesktopBook(bookId);
             await initializeDesktopRuntime(bookId);
