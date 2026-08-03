@@ -133,6 +133,7 @@ function AddBookDialog({
   const [name, setName] = useState("");
   const [questions, setQuestions] = useState<unknown[] | null>(null);
   const [fileError, setFileError] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
   const isWeb = !isTauriRuntime();
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -144,7 +145,6 @@ function AddBookDialog({
       const parsed = JSON.parse(text);
       if (!Array.isArray(parsed)) throw new Error("文件顶层必须是数组");
       setQuestions(parsed);
-      // Auto-fill name from file if not set
       if (!name) {
         const baseName = file.name.replace(/\.json$/i, "");
         if (baseName !== "questions") setName(baseName);
@@ -160,11 +160,16 @@ function AddBookDialog({
     const trimmedId = bookId.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     const trimmedName = name.trim();
     if (!trimmedId || !trimmedName) return;
-    if (isWeb && !questions) return;
-    onConfirm(trimmedId, trimmedName, questions ?? undefined);
+    if (!isWeb) {
+      // Desktop: needs file already copied to directory
+      onConfirm(trimmedId, trimmedName);
+      return;
+    }
+    // Web: create with questions array (may be empty — that's fine, user will paste screenshots)
+    onConfirm(trimmedId, trimmedName, questions ?? []);
   }
 
-  const canSubmit = bookId.trim() && name.trim() && (!isWeb || questions !== null);
+  const canSubmit = bookId.trim() && name.trim();
 
   return (
     <>
@@ -173,7 +178,7 @@ function AddBookDialog({
         <h3 className="text-xl font-semibold text-ink">添加新书</h3>
         {isWeb ? (
           <p className="mt-2 text-sm text-ink/60">
-            上传 <code className="rounded bg-black/6 px-1 text-xs">questions.json</code> 文件，题库会保存在本地浏览器存储中。
+            建一个空书本，之后直接在错题录入页用 <kbd className="rounded bg-black/8 px-1 text-xs font-semibold">Ctrl+V</kbd> 粘贴截图录入。
           </p>
         ) : (
           <p className="mt-2 text-sm text-ink/60">
@@ -197,32 +202,46 @@ function AddBookDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如: 数学强化题库"
+              placeholder="例如: 武忠祥强化截图本"
               className="apple-control w-full rounded-full px-4 py-2.5 text-sm"
             />
           </label>
+
+          {/* Optional JSON upload — only in web mode */}
           {isWeb && (
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-ink/70">上传 questions.json</span>
-              <div className={[
-                "flex items-center gap-3 rounded-[20px] border-2 border-dashed px-4 py-3 transition",
-                questions ? "border-moss/50 bg-moss/5" : "border-white/60 bg-white/30",
-              ].join(" ")}>
-                <span className="text-xl">{questions ? "✅" : "📄"}</span>
-                <span className="flex-1 truncate text-sm text-ink/60">
-                  {questions ? `已读取 ${(questions as unknown[]).length} 题` : "点击选择文件"}
-                </span>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  style={{ position: "relative" }}
-                />
-              </div>
-              {fileError && <p className="text-xs text-cinnabar">{fileError}</p>}
-            </label>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowUpload(!showUpload)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slateblue/70 hover:text-slateblue"
+              >
+                <span className="text-[10px]">{showUpload ? "▾" : "▸"}</span>
+                可选：导入 questions.json（高级）
+              </button>
+              {showUpload && (
+                <div className="space-y-1.5">
+                  <div className={[
+                    "flex items-center gap-3 rounded-[18px] border-2 border-dashed px-4 py-2.5 transition",
+                    questions ? "border-moss/50 bg-moss/5" : "border-white/60 bg-white/30",
+                  ].join(" ")}>
+                    <span className="text-lg">{questions ? "✅" : "📄"}</span>
+                    <span className="flex-1 truncate text-sm text-ink/60">
+                      {questions ? `已读取 ${(questions as unknown[]).length} 题` : "点击选择文件"}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      style={{ position: "relative" }}
+                    />
+                  </div>
+                  {fileError && <p className="text-xs text-cinnabar">{fileError}</p>}
+                </div>
+              )}
+            </div>
           )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -236,7 +255,7 @@ function AddBookDialog({
               disabled={!canSubmit}
               className="apple-pill px-4 py-2 text-sm font-semibold disabled:opacity-40"
             >
-              添加并切换
+              创建并切换
             </button>
           </div>
         </form>

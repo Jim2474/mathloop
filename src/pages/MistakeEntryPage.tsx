@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionThumbnail from "../components/question/QuestionThumbnail";
@@ -7,6 +7,8 @@ import {
   findQuestionsByPageAndNumber,
   getQuestionLookupLabel,
 } from "../services/mistakeLookup";
+import { deleteCustomQuestion } from "../services/customQuestionService";
+import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 import type { Question } from "../types/question";
@@ -43,8 +45,9 @@ const batchSections: Array<{
 ];
 
 export default function MistakeEntryPage() {
-  const { questions, isLoading, error } = useQuestionStore();
+  const { questions, isLoading, error, loadQuestions } = useQuestionStore();
   const { cards, mistakeRecords, markMistakeQuestion, removeMistakeQuestion } = useReviewStore();
+  const { activeBookId } = useBookStore();
   const [pageInput, setPageInput] = useState("");
   const [questionNoInput, setQuestionNoInput] = useState("");
   const [reviewAtInput, setReviewAtInput] = useState(() => toDateTimeLocalValue(getDefaultReviewAt()));
@@ -95,6 +98,18 @@ export default function MistakeEntryPage() {
       setBatchChapter(chapters[0]);
     }
   }, [batchChapter, chapters]);
+
+  // Hard-delete a custom screenshot question (image from IndexedDB + metadata + mistake record)
+  const handleDeleteCustomQuestion = useCallback(
+    async (questionId: string) => {
+      if (!activeBookId) return;
+      if (!window.confirm("确定要彻底删除这道截图题吗？图片和复习记录都会清除，无法恢复。")) return;
+      removeMistakeQuestion(questionId);
+      await deleteCustomQuestion(activeBookId, questionId);
+      await loadQuestions();
+    },
+    [activeBookId, removeMistakeQuestion, loadQuestions],
+  );
 
   function setQuickReviewTime(kind: "now" | "tonight" | "tomorrow") {
     const next = new Date();
@@ -580,13 +595,26 @@ export default function MistakeEntryPage() {
                         <h4 className="mt-1 font-semibold">{question.questionNo}</h4>
                         <p className="mt-1 text-sm text-ink/60">{question.chapter}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeMistakeQuestion(question.id)}
-                        className="apple-ghost-pill w-fit px-3 py-2 text-xs font-semibold text-ink/64 hover:text-cinnabar"
-                      >
-                        移出
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {/* Custom screenshot questions get a hard-delete button */}
+                        {question.id.startsWith("custom-") && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteCustomQuestion(question.id)}
+                            title="彻底删除截图及所有复习记录"
+                            className="apple-ghost-pill w-fit px-3 py-2 text-xs font-semibold text-ink/64 hover:text-cinnabar"
+                          >
+                            🗑 删除
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeMistakeQuestion(question.id)}
+                          className="apple-ghost-pill w-fit px-3 py-2 text-xs font-semibold text-ink/64 hover:text-cinnabar"
+                        >
+                          移出
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
                       <Info label="录入页码" value={record.sourcePage} />
