@@ -88,8 +88,31 @@ function loadMeta(bookId: string): CustomQuestionMeta[] {
   }
 }
 
-function saveMeta(bookId: string, items: CustomQuestionMeta[]): void {
-  localStorage.setItem(getMetaKey(bookId), JSON.stringify(items));
+/** Load metadata with IndexedDB fallback (for after-restart recovery). */
+async function loadMetaAsync(bookId: string): Promise<CustomQuestionMeta[]> {
+  const fromLS = loadMeta(bookId);
+  if (fromLS.length > 0) return fromLS;
+  // Try IndexedDB backup
+  try {
+    const raw = await dbGet(`meta-${bookId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Restore into localStorage so future sync reads work
+      localStorage.setItem(getMetaKey(bookId), raw);
+      return parsed as CustomQuestionMeta[];
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+async function saveMeta(bookId: string, items: CustomQuestionMeta[]): Promise<void> {
+  const json = JSON.stringify(items);
+  localStorage.setItem(getMetaKey(bookId), json);
+  // Dual-write to IndexedDB as backup
+  await dbPut(`meta-${bookId}`, json);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -108,10 +131,10 @@ export async function createCustomQuestion(
   // Store image in IndexedDB
   await dbPut(id, imageDataUrl);
 
-  // Store metadata in localStorage
+  // Store metadata in localStorage + IndexedDB backup
   const meta = loadMeta(bookId);
   meta.push({ id, bookId, note: note.trim(), createdAt: new Date().toISOString() });
-  saveMeta(bookId, meta);
+  await saveMeta(bookId, meta);
 
   return id;
 }
@@ -130,15 +153,24 @@ export async function getCustomQuestionImageUrl(questionId: string): Promise<str
 export async function deleteCustomQuestion(bookId: string, questionId: string): Promise<void> {
   await dbDelete(questionId);
   const meta = loadMeta(bookId).filter((m) => m.id !== questionId);
-  saveMeta(bookId, meta);
+  await saveMeta(bookId, meta);
 }
 
 /**
- * Build Question objects for all custom questions of the given book.
- * These are merged into the question library so FSRS works normally.
+ * Build Question objects for all custom questions of the given book (sync, from localStorage).
+ * Suitable for in-session use where localStorage is fresh.
  */
 export function getCustomQuestions(bookId: string): Question[] {
   const meta = loadMeta(bookId);
+  return meta.map((m) => buildCustomQuestion(m));
+}
+
+/**
+ * Build Question objects for all custom questions, with IndexedDB fallback.
+ * Use this when loading questions on app startup (localStorage might be stale).
+ */
+export async function getCustomQuestionsAsync(bookId: string): Promise<Question[]> {
+  const meta = await loadMetaAsync(bookId);
   return meta.map((m) => buildCustomQuestion(m));
 }
 

@@ -46,8 +46,8 @@ type ReviewState = {
   initializeCards: (questions: Question[]) => void;
   syncQuestionLibrary: (questions: Question[]) => ReviewSyncResult;
   cleanupOrphanReviewData: (questions: Question[]) => ReviewCleanupResult;
-  getOrCreateDailyReviewSession: (questions: Question[], now?: Date) => DailyReviewSession;
-  startNextReviewRound: (questions: Question[], now?: Date) => DailyReviewSession;
+  getOrCreateDailyReviewSession: (questions: Question[], now?: Date, activeBookId?: string | null) => DailyReviewSession;
+  startNextReviewRound: (questions: Question[], now?: Date, activeBookId?: string | null) => DailyReviewSession;
   markDailyReviewSessionCompleted: (completedAt?: Date) => void;
   clearStaleDailySession: (now?: Date) => void;
   rateQuestion: (questionId: string, rating: ReviewRating, reviewedAt?: Date) => ReviewLog;
@@ -172,26 +172,36 @@ export const useReviewStore = create<ReviewState>()(
 
         return result;
       },
-      getOrCreateDailyReviewSession: (questions, now = new Date()) => {
+      getOrCreateDailyReviewSession: (questions, now = new Date(), activeBookId) => {
         const state = get();
         const dateKey = getLocalDateKey(now);
-        if (state.dailyReviewSession?.dateKey === dateKey) {
-          if (state.dailyReviewSession.queue.length === 0) {
-            const refreshedSession = createDailyReviewSession(state, questions, now);
+        const existing = state.dailyReviewSession;
+
+        // Reuse session only if it's for the SAME date AND the SAME book.
+        // Without the bookId check, switching books reuses the wrong book's
+        // question IDs in the queue, causing "队列题目不存在" errors.
+        const sessionMatchesBook =
+          !activeBookId ||
+          !existing?.bookId ||
+          existing.bookId === activeBookId;
+
+        if (existing?.dateKey === dateKey && sessionMatchesBook) {
+          if (existing.queue.length === 0) {
+            const refreshedSession = createDailyReviewSession(state, questions, now, activeBookId);
             if (refreshedSession.queue.length > 0) {
               set({ dailyReviewSession: refreshedSession });
               return refreshedSession;
             }
           }
-          return state.dailyReviewSession;
+          return existing;
         }
 
-        const session = createDailyReviewSession(state, questions, now);
+        const session = createDailyReviewSession(state, questions, now, activeBookId);
         set({ dailyReviewSession: session });
         return session;
       },
-      startNextReviewRound: (questions, now = new Date()) => {
-        const session = createDailyReviewSession(get(), questions, now);
+      startNextReviewRound: (questions, now = new Date(), activeBookId) => {
+        const session = createDailyReviewSession(get(), questions, now, activeBookId);
         set({ dailyReviewSession: session });
         return session;
       },
@@ -460,6 +470,7 @@ function createDailyReviewSession(
   state: Pick<ReviewState, "cards" | "reviewLogs" | "mistakeRecords" | "settings">,
   questions: Question[],
   now: Date,
+  bookId?: string | null,
 ): DailyReviewSession {
   const dateKey = getLocalDateKey(now);
   return {
@@ -474,6 +485,7 @@ function createDailyReviewSession(
       now,
     }),
     createdAt: now.toISOString(),
+    bookId: bookId ?? null,
   };
 }
 

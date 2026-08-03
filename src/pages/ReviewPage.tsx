@@ -56,7 +56,7 @@ export default function ReviewPage() {
 
   useEffect(() => {
     if (!isLoading && !error && questions.length > 0) {
-      getOrCreateDailyReviewSession(questions);
+      getOrCreateDailyReviewSession(questions, undefined, activeBookId);
     }
   }, [error, getOrCreateDailyReviewSession, isLoading, questions]);
 
@@ -163,7 +163,7 @@ export default function ReviewPage() {
   }
 
   function handleContinueNextRound() {
-    startNextReviewRound(questions);
+    startNextReviewRound(questions, undefined, activeBookId);
     setCurrentIndex(0);
     setShowAnswer(false);
     setIsBrowsingCompletedQueue(false);
@@ -175,7 +175,7 @@ export default function ReviewPage() {
       maxDailyReviews: nextLimit,
       maxNewPerDay: nextLimit,
     });
-    startNextReviewRound(questions);
+    startNextReviewRound(questions, undefined, activeBookId);
     setCurrentIndex(0);
     setShowAnswer(false);
     setIsBrowsingCompletedQueue(false);

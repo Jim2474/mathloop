@@ -49,6 +49,8 @@ export type DailyReviewSession = {
   queue: ReviewQueueItem[];
   createdAt: string;
   completedAt?: string;
+  /** The book this session was built for. If bookId changes, the session is regenerated. */
+  bookId?: string | null;
 };
 
 export type ReviewMistakeRecord = {

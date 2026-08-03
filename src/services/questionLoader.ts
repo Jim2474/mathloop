@@ -2,7 +2,7 @@ import type { Question } from "../types/question";
 import { setQuestionImageFixes } from "../utils/questionImages";
 import { getActiveBookId } from "../utils/bookId";
 import { initializeDesktopRuntime, invokeDesktop, isTauriRuntime } from "./desktopBridge";
-import { getCustomQuestions } from "./customQuestionService";
+import { getCustomQuestions, getCustomQuestionsAsync } from "./customQuestionService";
 import { isCustomBook, loadCustomBookQuestions } from "./webBookService";
 
 const DEFAULT_QUESTIONS_URL = "/data/questions.json";
@@ -15,8 +15,8 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
   // This works in both web and Tauri (WKWebView supports localStorage + IndexedDB)
   if (bookId && isCustomBook(bookId)) {
     const questions = await loadCustomBookQuestions(bookId);
-    // Also merge screenshot questions for this book
-    const customQ = getCustomQuestions(bookId);
+    // Use async version to recover screenshots from IndexedDB if localStorage was cleared
+    const customQ = await getCustomQuestionsAsync(bookId);
     return [...questions, ...customQ];
   }
 
@@ -29,9 +29,9 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
       throw new Error("questions.json 顶层必须是题目数组。");
     }
 
-    setQuestionImageFixes(await loadDesktopQuestionImageFixes(bookId));
     // Also merge any pasted screenshot questions for this book (stored in IndexedDB)
-    const customQ = bookId ? getCustomQuestions(bookId) : [];
+    // Use async version so screenshots survive app restarts even if localStorage is cleared
+    const customQ = bookId ? await getCustomQuestionsAsync(bookId) : [];
     return [...(data as Question[]), ...customQ];
   }
 
@@ -53,9 +53,9 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
 
   setQuestionImageFixes(await loadQuestionImageFixes(bookId));
 
-  // Merge screenshot questions for this book
+  // Merge screenshot questions for this book (async for restart resilience)
   const baseQuestions = data as Question[];
-  const customQ = bookId ? getCustomQuestions(bookId) : [];
+  const customQ = bookId ? await getCustomQuestionsAsync(bookId) : [];
   return [...baseQuestions, ...customQ];
 }
 
