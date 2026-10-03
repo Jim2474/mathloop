@@ -16,3 +16,6 @@ pnpm-debug.log*
 
 .DS_Store
 Thumbs.db
+
+# PDF import temporary output
+scripts/pdf_import/output/

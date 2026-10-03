@@ -157,9 +157,31 @@ export const useReviewStore = create<ReviewState>()(
             } catch { /* keep current state */ }
           }
 
+          // For mistake-dedicated books (meta.source === "pdf-import"),
+          // automatically seed active mistake records so they are immediately available for review.
+          const nextMistakeRecords = { ...safeMistakeRecords };
+          let addedMistakes = false;
+          for (const question of questions) {
+            if (question.meta?.source === "pdf-import" && !nextMistakeRecords[question.id]) {
+              nextMistakeRecords[question.id] = {
+                questionId: question.id,
+                markedAt: timestamp,
+                reviewAt: timestamp,
+                sourcePage: question.pageRangeText || question.pdfPageLabel || "",
+                sourceQuestionNo: question.questionNo || "",
+                note: "PDF自动识别错题",
+                active: true,
+              };
+              addedMistakes = true;
+            }
+          }
+          if (addedMistakes) {
+            safeDailySession = null;
+          }
+
           return {
             cards: nextCards,
-            mistakeRecords: safeMistakeRecords,
+            mistakeRecords: nextMistakeRecords,
             reviewLogs: safeReviewLogs,
             dailyReviewSession: safeDailySession,
             questionFingerprints: {

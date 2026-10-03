@@ -202,6 +202,56 @@ fn load_question_image_fixes_json<R: Runtime>(
     }
 }
 
+/// Read the PDF import staging directory for a book.
+/// Returns the raw JSON content of import_batch.json, or null if none staged.
+/// This is read-only — it never modifies the staging dir or the source PDF.
+#[tauri::command]
+fn read_pdf_import_stage(book_id: String) -> Result<Option<String>, String> {
+    let book_dir = resolve_book_dir(&book_id)
+        .unwrap_or_else(|_| mathloop_data_dir().unwrap_or_default().join("books").join(&book_id));
+    let batch_path = book_dir.join("pdf-import").join("import_batch.json");
+    if !batch_path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&batch_path).map_err(to_string)?;
+    Ok(Some(content))
+}
+
+/// Load a staged PDF import image as a base64 data URL.
+/// path_in_import is relative to the book's pdf-import/ directory,
+/// e.g. "images/p040.png".
+/// This is read-only.
+#[tauri::command]
+fn load_staged_image_data_url(
+    book_id: String,
+    path_in_import: String,
+) -> Result<String, String> {
+    // Sanitize: prevent directory traversal
+    if path_in_import.contains("..") {
+        return Err("Invalid path: directory traversal not allowed.".to_string());
+    }
+    let book_dir = resolve_book_dir(&book_id)
+        .unwrap_or_else(|_| mathloop_data_dir().unwrap_or_default().join("books").join(&book_id));
+    let img_path = book_dir.join("pdf-import").join(&path_in_import);
+    if !img_path.exists() {
+        return Err(format!("Staged image not found: {}", path_in_import));
+    }
+    let bytes = fs::read(&img_path).map_err(to_string)?;
+    let b64 = general_purpose::STANDARD.encode(&bytes);
+    // Detect mime from extension
+    let ext = img_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png")
+        .to_lowercase();
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        _ => "image/png",
+    };
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
 #[tauri::command]
 fn update_question_tips(
     book_id: Option<String>,
@@ -214,53 +264,123 @@ fn update_question_tips(
     }
 
     let data_dir = match &book_id {
-        Some(bid) => resolve_book_dir(bid)?.join("data"),
-        None => mathloop_data_dir()?.join("data"),
-    };
-    let questions_path = data_dir.join("questions.json");
-
-    if !questions_path.exists() {
-        return Err("题库 questions.json 不存在，无法保存 tips。".to_string());
-    }
-
-    let original = fs::read_to_string(&questions_path).map_err(to_string)?;
-    let mut questions: Value = serde_json::from_str(&original).map_err(to_string)?;
-    let Some(items) = questions.as_array_mut() else {
-        return Err("questions.json 顶层必须是题目数组。".to_string());
+        Some(bid) => {
+            // resolve_book_dir returns Err if dir doesn't exist; for custom books
+            // the dir may not exist at all — fall through to SQLite path.
+            match resolve_book_dir(bid) {
+                Ok(dir) => Some(dir.join("data")),
+                Err(_) => None,
+            }
+        }
+        None => Some(mathloop_data_dir()?.join("data")),
     };
 
-    let Some(question) = items.iter_mut().find(|item| {
-        item.get("id")
-            .and_then(Value::as_str)
-            .is_some_and(|id| id == question_id)
-    }) else {
-        return Err("没有找到要保存 tips 的题目。".to_string());
-    };
+    let questions_path = data_dir
+        .as_ref()
+        .map(|d| d.join("questions.json"))
+        .filter(|p| p.exists());
 
-    let Some(object) = question.as_object_mut() else {
-        return Err("题目数据格式不正确。".to_string());
-    };
+    if let Some(ref path) = questions_path {
+        // ── Standard book path: update questions.json ─────────────────────────
+        let original = fs::read_to_string(path).map_err(to_string)?;
+        let mut questions: Value = serde_json::from_str(&original).map_err(to_string)?;
+        let Some(items) = questions.as_array_mut() else {
+            return Err("questions.json 顶层必须是题目数组。".to_string());
+        };
 
-    let backup_dir = mathloop_data_dir()?.join("backups");
-    fs::create_dir_all(&backup_dir).map_err(to_string)?;
-    let backup_path = backup_dir.join(format!(
-        "questions-before-tip-{}.json",
-        Local::now().format("%Y-%m-%d-%H-%M-%S")
-    ));
-    fs::write(&backup_path, original).map_err(to_string)?;
+        let Some(question) = items.iter_mut().find(|item| {
+            item.get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| id == question_id)
+        }) else {
+            return Err("没有找到要保存 tips 的题目。".to_string());
+        };
 
-    let trimmed = tips.trim();
-    if trimmed.is_empty() {
-        object.remove("tips");
+        let Some(object) = question.as_object_mut() else {
+            return Err("题目数据格式不正确。".to_string());
+        };
+
+        let backup_dir = mathloop_data_dir()?.join("backups");
+        fs::create_dir_all(&backup_dir).map_err(to_string)?;
+        let backup_path = backup_dir.join(format!(
+            "questions-before-tip-{}.json",
+            Local::now().format("%Y-%m-%d-%H-%M-%S")
+        ));
+        fs::write(&backup_path, original).map_err(to_string)?;
+
+        let trimmed = tips.trim();
+        if trimmed.is_empty() {
+            object.remove("tips");
+        } else {
+            object.insert("tips".to_string(), Value::String(trimmed.to_string()));
+        }
+
+        let next = serde_json::to_string_pretty(&questions).map_err(to_string)?;
+        let tmp_path = path.with_extension("json.tmp");
+        fs::write(&tmp_path, next).map_err(to_string)?;
+        fs::rename(&tmp_path, path).map_err(to_string)?;
     } else {
-        object.insert("tips".to_string(), Value::String(trimmed.to_string()));
+        // ── Custom/screenshot book path: save tips to SQLite ──────────────────
+        // Key format: tips::{bookId}::{questionId}
+        let db_path = mathloop_data_dir()?.join(DB_FILE);
+        ensure_database(&db_path)?;
+        let connection = Connection::open(&db_path).map_err(to_string)?;
+
+        let effective_book_id = book_id.as_deref().unwrap_or("default");
+        let key = format!("tips::{}::{}", effective_book_id, question_id);
+        let trimmed = tips.trim();
+
+        if trimmed.is_empty() {
+            connection
+                .execute("DELETE FROM review_store WHERE key = ?1", params![key])
+                .map_err(to_string)?;
+        } else {
+            connection
+                .execute(
+                    "INSERT INTO review_store (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                    params![key, trimmed, Local::now().to_rfc3339()],
+                )
+                .map_err(to_string)?;
+        }
     }
 
-    let next = serde_json::to_string_pretty(&questions).map_err(to_string)?;
-    let tmp_path = questions_path.with_extension("json.tmp");
-    fs::write(&tmp_path, next).map_err(to_string)?;
-    fs::rename(&tmp_path, &questions_path).map_err(to_string)?;
     Ok(())
+}
+
+/// Load all saved tips for a book as a map of { questionId → tips }.
+/// Covers tips stored in SQLite (custom/screenshot books).
+/// Tips embedded in questions.json are NOT returned here — they are
+/// already part of the question objects loaded by load_questions_json.
+#[tauri::command]
+fn load_question_tips_map(book_id: String) -> Result<std::collections::HashMap<String, String>, String> {
+    let db_path = mathloop_data_dir()?.join(DB_FILE);
+    ensure_database(&db_path)?;
+    let connection = Connection::open(db_path).map_err(to_string)?;
+
+    let prefix = format!("tips::{}::", book_id);
+    let mut stmt = connection
+        .prepare("SELECT key, value FROM review_store WHERE key LIKE ?1")
+        .map_err(to_string)?;
+
+    let map: std::collections::HashMap<String, String> = stmt
+        .query_map(params![format!("{}%", prefix)], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(to_string)?
+        .filter_map(Result::ok)
+        .map(|(key, value)| {
+            // Strip "tips::{bookId}::" prefix to get the raw questionId
+            let question_id = key
+                .strip_prefix(&prefix)
+                .unwrap_or(&key)
+                .to_string();
+            (question_id, value)
+        })
+        .collect();
+
+    Ok(map)
 }
 
 #[tauri::command]
@@ -385,7 +505,10 @@ fn main() {
             load_questions_json,
             load_question_image_fixes_json,
             update_question_tips,
+            load_question_tips_map,
             load_asset_data_url,
+            read_pdf_import_stage,
+            load_staged_image_data_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MathLoop");

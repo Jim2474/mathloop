@@ -8,6 +8,7 @@ const navItems = [
   { to: "/mistakes", label: "错题录入" },
   { to: "/questions", label: "题库" },
   { to: "/review", label: "复习" },
+  { to: "/pdf-import", label: "PDF导入" },
   { to: "/backup", label: "备份" },
 ];
 

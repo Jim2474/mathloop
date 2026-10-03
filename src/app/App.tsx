@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "../components/layout/AppShell";
 import BackupPage from "../pages/BackupPage";
 import DashboardPage from "../pages/DashboardPage";
+import ImportPdfPage from "../pages/ImportPdfPage";
 import MistakeEntryPage from "../pages/MistakeEntryPage";
 import QuestionDetailPage from "../pages/QuestionDetailPage";
 import QuestionListPage from "../pages/QuestionListPage";
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/questions/:id" element={<QuestionDetailPage />} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/backup" element={<BackupPage />} />
+        <Route path="/pdf-import" element={<ImportPdfPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

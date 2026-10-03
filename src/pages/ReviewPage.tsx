@@ -20,6 +20,9 @@ const ratings: ReviewRating[] = ["Again", "Hard", "Good", "Easy"];
 
 export default function ReviewPage() {
   const { questions, isLoading, error, saveQuestionTips, getEffectiveTips } = useQuestionStore();
+  // Subscribe to the localTips map so we can react when a tip is saved in web mode.
+  // Tauri mode reloads the questions array instead, so currentQuestion?.tips changes there.
+  const localTips = useQuestionStore((state) => state.localTips);
   const {
     cards,
     reviewLogs,
@@ -116,8 +119,12 @@ export default function ReviewPage() {
     setTipsDraft(currentQuestion ? getEffectiveTips(currentQuestion.id) : "");
     setTipsMessage("");
     setIsSavingTips(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getEffectiveTips is stable
-  }, [currentQuestion?.id, currentQuestion?.tips, getEffectiveTips]);
+    // localTips is intentionally included: web mode saves tips to localTips (not to
+    // currentQuestion.tips), so we need it to re-sync the textarea when the user switches
+    // back to a question whose tip was already saved.
+    // getEffectiveTips is a stable reference from Zustand and intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentQuestion?.id, currentQuestion?.tips, localTips, getEffectiveTips]);
 
   function handleRating(rating: ReviewRating) {
     if (!currentQuestion || !dailyReviewSession) {

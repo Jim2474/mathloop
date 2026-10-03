@@ -78,6 +78,17 @@ export async function updateDesktopQuestionTips(
   await invokeDesktop<void>("update_question_tips", { questionId, tips, bookId: bookId ?? null });
 }
 
+/**
+ * Load all tips for the given book that were saved to SQLite
+ * (i.e. for custom / screenshot questions that have no questions.json).
+ * Returns a map of { questionId → tips string }.
+ * Tips that are embedded in questions.json are NOT included here.
+ */
+export async function loadDesktopQuestionTipsMap(bookId: string): Promise<Record<string, string>> {
+  if (!isTauriRuntime()) return {};
+  return invokeDesktop<Record<string, string>>("load_question_tips_map", { bookId });
+}
+
 export async function listDesktopBooks(): Promise<BookEntry[]> {
   if (!isTauriRuntime()) {
     return [];

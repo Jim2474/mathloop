@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { isTauriRuntime, updateDesktopQuestionTips } from "../services/desktopBridge";
+import {
+  isTauriRuntime,
+  updateDesktopQuestionTips,
+  loadDesktopQuestionTipsMap,
+} from "../services/desktopBridge";
 import { loadOpenClawQuestions } from "../services/questionLoader";
 import type { Question, UncertainFilter } from "../types/question";
 import { getActiveBookId } from "../utils/bookId";
@@ -46,6 +50,29 @@ export const useQuestionStore = create<QuestionState>()(
         set({ isLoading: true, error: null });
         try {
           const questions = await loadOpenClawQuestions();
+
+          // In Tauri mode, merge SQLite-backed tips (for custom/screenshot books)
+          // into localTips so getEffectiveTips() works without an async call.
+          // Tips stored in questions.json are already part of each Question object
+          // and handled by the `question?.tips` fallback in getEffectiveTips.
+          if (isTauriRuntime()) {
+            const bookId = getActiveBookId();
+            if (bookId) {
+              try {
+                const sqliteTips = await loadDesktopQuestionTipsMap(bookId);
+                if (Object.keys(sqliteTips).length > 0) {
+                  set((state) => ({
+                    // SQLite is the source of truth: merge on top of any cached localTips,
+                    // preserving keys that SQLite doesn't know about (e.g. from other books).
+                    localTips: { ...state.localTips, ...sqliteTips },
+                  }));
+                }
+              } catch {
+                // Non-fatal: tips may just not be loaded this session
+              }
+            }
+          }
+
           set({ questions, isLoading: false, error: null });
         } catch (error) {
           const message = error instanceof Error ? error.message : "读取题库失败。";
@@ -56,6 +83,23 @@ export const useQuestionStore = create<QuestionState>()(
         if (isTauriRuntime()) {
           const bookId = getActiveBookId();
           await updateDesktopQuestionTips(questionId, tips, bookId ?? undefined);
+
+          // Update localTips immediately so the UI reflects the change without
+          // waiting for a full question reload.  For standard books the tips field
+          // is also embedded in questions.json, so we reload questions too.
+          const trimmed = tips.trim();
+          set((state) => {
+            const next = { ...state.localTips };
+            if (trimmed) {
+              next[questionId] = trimmed;
+            } else {
+              delete next[questionId];
+            }
+            return { localTips: next };
+          });
+
+          // Reload questions to pick up tips embedded in questions.json (standard books).
+          // For custom books this is a no-op since their tips come from localTips above.
           const questions = await loadOpenClawQuestions();
           set({ questions, error: null });
         } else {

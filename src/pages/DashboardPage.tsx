@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
+import ActivityHeatmap from "../components/dashboard/ActivityHeatmap";
 import StatCard from "../components/dashboard/StatCard";
 import { getReviewDashboardStats } from "../services/dashboardStats";
 import { useBookStore } from "../store/useBookStore";
@@ -58,6 +59,8 @@ export default function DashboardPage() {
         <StatCard label="今日已完成" value={reviewStats.completedToday} tone="cool" />
         <StatCard label="已复习题数" value={reviewStats.reviewedTotal} tone="cool" />
       </section>
+
+      <ActivityHeatmap reviewLogs={reviewLogs} />
 
       <section className="grid gap-5 lg:grid-cols-[1fr_1.3fr]">
         <div className="apple-tile rounded-[24px] p-6">
