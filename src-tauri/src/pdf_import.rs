@@ -572,6 +572,7 @@ pub async fn load_pdf_source_page(
         let first = q["pageStart"].as_u64().ok_or("题目页码缺失")? as usize;
         let last = q["answerMeta"]["answerPageEnd"]
             .as_u64()
+            .or_else(|| q["pageEnd"].as_u64())
             .unwrap_or(first as u64) as usize;
         if page_number < first || page_number > last {
             return Err("页码不属于这道题".into());
@@ -633,7 +634,24 @@ fn safe_file(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn without_answer(q: &Value) -> bool {
+    q["answerMeta"]["hasAnswer"] == false
+}
+
+fn validate_answer_images(q: &Value) -> Result<(), String> {
+    let images = q["answerImages"].as_array().ok_or("答案图片列表缺失")?;
+    if without_answer(q) {
+        if !q["answerImage"].is_null() || !images.is_empty() {
+            return Err("无答案题目的图片引用不一致".into());
+        }
+    } else if images.is_empty() || !images.contains(&q["answerImage"]) {
+        return Err("答案图片缺失或引用不一致".into());
+    }
+    Ok(())
+}
+
 fn validate_page_images(q: &Value) -> Result<(), String> {
+    validate_answer_images(q)?;
     if q["pageImages"].is_null() {
         return Ok(());
     }
@@ -728,6 +746,9 @@ fn commit(
         q["pdfSource"]["batchId"] = json!(batch_id);
         q["pdfSource"]["importedAt"] = json!(batch.created_at);
         for field in ["questionImage", "answerImage"] {
+            if field == "answerImage" && without_answer(&q) {
+                continue;
+            }
             let name = q[field].as_str().ok_or("题目图片缺失")?.to_string();
             safe_file(&name)?;
             if !staging.join(&name).is_file() {
@@ -1225,7 +1246,7 @@ fn restore_library(root: &Path, book_id: &str, path: &Path) -> Result<usize, Str
                     continue;
                 }
                 let images = q[field].as_array().ok_or("备份缺少图片列表")?;
-                if images.is_empty() {
+                if images.is_empty() && !(field == "answerImages" && without_answer(q)) {
                     return Err("备份图片列表为空".into());
                 }
                 for file in images {
@@ -1241,6 +1262,9 @@ fn restore_library(root: &Path, book_id: &str, path: &Path) -> Result<usize, Str
                 ("questionImage", "questionImages"),
                 ("answerImage", "answerImages"),
             ] {
+                if single == "answerImage" && without_answer(q) {
+                    continue;
+                }
                 if !q[multiple].as_array().unwrap().contains(&q[single]) {
                     return Err("备份的图片引用不一致".into());
                 }

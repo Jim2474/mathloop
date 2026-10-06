@@ -67,8 +67,8 @@ function PreviewQuestion({ jobId, question: q }: { jobId: string; question: Ques
   return <div className="mt-4 space-y-4">
     <p className="text-sm font-semibold">题目</p>
     {q.questionImages.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 题目 ${index + 1}`} fullPagePath={fullPath(index)} fullPageLabel={getQuestionLocator(q)} />)}
-    <details className="rounded-2xl border border-black/5 p-4"><summary className="cursor-pointer text-sm font-semibold">查看解析 · PDF 第 {answerStart === answerEnd ? answerStart : `${answerStart}–${answerEnd}`} 页 · 书本第 {q.answerMeta?.printedPageNumber || "未识别"} 页</summary>
+    {q.answerMeta?.hasAnswer === false ? <p className="rounded-2xl border border-black/5 p-4 text-sm text-ink/60">原书未提供参考答案，仅导入题目和引用图表。可在复习时记录思路并自行评分。</p> : <details className="rounded-2xl border border-black/5 p-4"><summary className="cursor-pointer text-sm font-semibold">查看解析 · PDF 第 {answerStart === answerEnd ? answerStart : `${answerStart}–${answerEnd}`} 页 · 书本第 {q.answerMeta?.printedPageNumber || "未识别"} 页</summary>
       <div className="mt-4 space-y-4">{q.answerImages?.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 解析 ${index + 1}`} fullPagePath={fullPath(index, true)} />)}</div>
-    </details>
+    </details>}
   </div>;
 }

@@ -22,3 +22,4 @@ scripts/pdf_import/output/
 .venv-pdf-import/
 .pdf-worker-build/
 src-tauri/resources/pdf-import-worker/
+MathLoop回退备份/

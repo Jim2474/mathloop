@@ -18,6 +18,7 @@ export type Question = {
     pageImageNumbers?: number[];
     questionPageNumbers?: number[];
     answerPageNumbers?: number[];
+    annotationColor?: "red" | "blue";
   };
   id: string;
   bookName: string;
@@ -37,6 +38,7 @@ export type Question = {
   answerImage?: string | null;
   answerImages?: string[] | null;
   answerMeta?: {
+    hasAnswer?: boolean;
     source?: string;
     answerPageStart?: number;
     answerPageEnd?: number;

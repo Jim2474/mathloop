@@ -187,7 +187,7 @@ export default function QuestionDetailPage() {
             ))}
           </div>
         ) : (
-          <EmptyState title="暂无答案图片" description="answerImage 和 answerImages 为空。" />
+          <EmptyState title={question.answerMeta?.hasAnswer === false ? "原书未提供参考答案" : "暂无答案图片"} description={question.answerMeta?.hasAnswer === false ? "本题保留题干、引用图表和页码，可在复习时记录思路。" : "尚未添加参考答案。"} />
         )}
       </section>
     </div>

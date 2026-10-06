@@ -14,8 +14,10 @@ from pathlib import Path
 
 import fitz
 from PIL import Image
+from control_textbook import FINGERPRINT as CONTROL_FINGERPRINT, PROFILE as CONTROL_PROFILE, extract_control, render as render_control_page
 
 PROFILES = {
+    CONTROL_FINGERPRINT: CONTROL_PROFILE,
     "2982c22df232fcd23181ab865b147a0784e49259d7a0dd1bdb78d95a92da5006": {
         "id": "wzx-calculus-2027", "name": "武忠祥高数辅导讲义·强化", "pages": 315,
     },
@@ -380,7 +382,7 @@ def main():
         fingerprint = source_fingerprint(doc)
         profile = PROFILES.get(fingerprint)
         if not profile or len(doc) != profile["pages"]:
-            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。首版支持提供的高数与线代讲义；新增红笔或更改文件名仍可识别")
+            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。目前支持提供的高数、线代讲义及自控课本；更改文件名仍可识别")
         if args.inspect:
             print(json.dumps({"pdfPath": path, "sourceFingerprint": fingerprint,
                               "profileId": profile["id"], "name": profile["name"],
@@ -391,7 +393,11 @@ def main():
                 raise ValueError("源 PDF 与导入资料不一致，无法查看整页")
             if not 1 <= args.render_page <= len(doc):
                 raise ValueError("PDF 页码超出范围")
-            doc[args.render_page - 1].get_pixmap(dpi=150, colorspace=fitz.csRGB, annots=True).save(args.output)
+            if profile["id"] == CONTROL_PROFILE["id"]:
+                doc[42].set_rotation(180)
+                render_control_page(doc[args.render_page - 1], args.output)
+            else:
+                doc[args.render_page - 1].get_pixmap(dpi=150, colorspace=fitz.csRGB, annots=True).save(args.output)
             after = os.stat(path)
             if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
                 raise ValueError("读取期间 PDF 被修改，请稍后再试")
@@ -399,7 +405,10 @@ def main():
         output = Path(args.output)
         output.mkdir(parents=True, exist_ok=True)
         existing = json.loads(Path(args.existing).read_text()) if args.existing else []
-        result = extract(doc, profile, fingerprint, path, output, existing)
+        if profile["id"] == CONTROL_PROFILE["id"]:
+            result = extract_control(doc, fingerprint, path, output, existing, emit)
+        else:
+            result = extract(doc, profile, fingerprint, path, output, existing)
         after = os.stat(path)
         if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
             raise ValueError("识别期间 PDF 被修改，请保存标注后重新选择；本次未导入")

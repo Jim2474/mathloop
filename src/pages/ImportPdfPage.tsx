@@ -10,7 +10,7 @@ import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
 
-const stages: Record<string, string> = { validating: "核对资料格式", scanning: "查找红笔与题目边界", rendering: "生成题目和跨页解析", ready: "准备预览", preview: "等待确认导入", importing: "保存导入批次", done: "导入完成" };
+const stages: Record<string, string> = { validating: "核对资料格式", scanning: "查找批注与题目边界", rendering: "生成题目和跨页图片", ready: "准备预览", preview: "等待确认导入", importing: "保存导入批次", done: "导入完成" };
 
 // Keep exclusions while navigating between pages during the same draft.
 const previewChoices = new Map<string, { index: number; keys: string[] }>();
@@ -106,7 +106,9 @@ export default function ImportPdfPage() {
       setNewBookName(`${selected.name}·错题`);
       const suggested = selected.boundBookId ?? (selected.profileId.startsWith("wzx")
         ? books.find((b) => b.id === "book005")?.id
-        : books.find((b) => b.name.includes("线代") || b.name.includes("线性代数"))?.id);
+        : selected.profileId.startsWith("linear")
+          ? books.find((b) => b.name.includes("线代") || b.name.includes("线性代数"))?.id
+          : undefined);
       setTargetId(suggested ?? "");
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
@@ -195,11 +197,11 @@ export default function ImportPdfPage() {
       <div>
         <p className="text-xs font-semibold tracking-widest text-slateblue">本地识别 · 按资料归档</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">从 PDF 导入错题</h1>
-        <p className="mt-3 text-sm leading-6 text-ink/60">读取原生红笔批注，自动提取题目和解析。无法可靠裁切的内容会跳过，并说明原因。</p>
+        <p className="mt-3 text-sm leading-6 text-ink/60">按资料的批注提取题目、引用图表及已有解析，预览后加入题库。无法可靠裁切的内容会跳过，并说明原因。</p>
       </div>
       <section className="rounded-3xl border border-white/70 bg-white/70 p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：武忠祥高数强化讲义、线代强化讲义答案</p></div>
+          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：高数与线代讲义的红笔批注、自控课本已核对题目的蓝色批注</p></div>
           <button type="button" disabled={busy || locked} onClick={() => void choose()} className="apple-pill px-5 py-2.5 text-sm font-semibold disabled:opacity-40">{busy ? "正在处理…" : input ? "更换 PDF" : "选择 PDF"}</button>
         </div>
         {input && <div className="mt-5 rounded-2xl bg-slateblue/5 p-4"><p className="font-medium">{input.name}</p><p className="mt-1 break-all text-xs text-ink/50">{input.pages} 页 · {input.pdfPath}</p></div>}
@@ -217,7 +219,7 @@ export default function ImportPdfPage() {
           {input?.boundBookId && <p className="mt-2 text-xs text-ink/50">这份资料已绑定对应题库，后续只追加到该书本。</p>}
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <button type="button" disabled={!input || !target || busy || locked} onClick={() => void start()} className="apple-pill px-6 py-3 text-sm font-semibold disabled:opacity-40">识别并预览</button>
-            <p className="text-xs text-ink/50">保留红笔原迹 · 自动去重 · 原 PDF 只读</p>
+            <p className="text-xs text-ink/50">保留批注原迹 · 自动去重 · 原 PDF 只读</p>
           </div>
         </div>
       </section>

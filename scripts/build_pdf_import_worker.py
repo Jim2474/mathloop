@@ -11,7 +11,8 @@ worker = root / 'scripts/pdf_import/app_worker.py'
 requirements = root / 'scripts/pdf_import/requirements-app.txt'
 output = root / 'src-tauri/resources/pdf-import-worker'
 build = root / '.pdf-worker-build'
-signature = hashlib.sha256(worker.read_bytes() + requirements.read_bytes() + os.uname().machine.encode()).hexdigest()
+signature = hashlib.sha256(worker.read_bytes() + (worker.parent / 'control_textbook.py').read_bytes()
+                           + requirements.read_bytes() + os.uname().machine.encode()).hexdigest()
 if (output / 'mathloop-pdf-worker').is_file() and (output / 'build-signature').is_file() and (output / 'build-signature').read_text() == signature:
     print('PDF worker is up to date')
     sys.exit(0)

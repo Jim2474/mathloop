@@ -1117,13 +1117,17 @@ fn run_migration_v1(connection: &Connection, top_dir: &Path) -> Result<(), Strin
         connection.execute_batch("COMMIT;").map_err(to_string)?;
     }
 
-    // Step 5: Write book registry
-    let registry = vec![BookEntry {
-        id: "default".to_string(),
-        name: "现有题库".to_string(),
-        added_at: Local::now().to_rfc3339(),
-    }];
-    write_registry(&connection, &registry)?;
+    // A missing legacy review row also leaves the migration version absent.
+    // In that case this migration can run again on every bootstrap. Initialize
+    // only an empty registry; never replace books the user has already added.
+    if read_registry_raw(connection)?.is_empty() {
+        let registry = vec![BookEntry {
+            id: "default".to_string(),
+            name: "现有题库".to_string(),
+            added_at: Local::now().to_rfc3339(),
+        }];
+        write_registry(connection, &registry)?;
+    }
 
     Ok(())
 }

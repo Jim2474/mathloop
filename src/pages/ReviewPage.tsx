@@ -440,7 +440,7 @@ export default function ReviewPage() {
               onClick={() => setShowAnswer(true)}
               className="apple-pill w-fit px-5 py-2.5 text-sm font-semibold"
             >
-              查看答案
+              {currentQuestion.answerMeta?.hasAnswer === false ? "查看思路与评分" : "查看答案"}
             </button>
           </div>
         ) : (
@@ -471,7 +471,7 @@ export default function ReviewPage() {
                   />
                 ))
               ) : (
-                <EmptyState title="暂无答案图片" />
+                <EmptyState title={currentQuestion.answerMeta?.hasAnswer === false ? "原书未提供参考答案" : "暂无答案图片"} description={currentQuestion.answerMeta?.hasAnswer === false ? "可记录自己的解题思路，并根据掌握情况评分。" : undefined} />
               )}
             </div>
 
