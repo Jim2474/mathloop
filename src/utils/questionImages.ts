@@ -42,16 +42,34 @@ export function getAnswerImagePaths(question: Question): string[] {
   return Array.from(new Set(paths));
 }
 
-export function getQuestionPageImagePath(question: Question): string {
-  if (!Number.isFinite(question.pageStart)) {
-    return "";
+export function getQuestionPageImagePath(question: Question, index = 0, answer = false): string {
+  const source = question.pdfSource;
+  const pages = answer ? source?.answerPageNumbers : source?.questionPageNumbers;
+  const page = pages?.[index] ?? (answer ? question.answerMeta?.answerPageStart : question.pageStart) ?? question.pageStart;
+  const fullIndex = source?.pageImageNumbers?.indexOf(page) ?? -1;
+  if (fullIndex >= 0 && question.pageImages?.[fullIndex]) return question.pageImages[fullIndex];
+  if (source?.fullImage && index === 0 && !answer) return source.fullImage;
+  if (source?.sourceFingerprint && source.batchId) {
+    let resolvedPage = page;
+    if (!pages) {
+      const count = (answer ? question.answerImages : question.questionImages)?.length ?? 1;
+      const first = answer ? question.answerMeta?.answerPageStart : question.pageStart;
+      const last = answer ? question.answerMeta?.answerPageEnd : question.pageEnd;
+      if (!first || !last) return "";
+      // Older imports omit per-image pages. The final slice has a known end page;
+      // other answer slices are safe only when there are no omitted blank pages.
+      if (index === count - 1) resolvedPage = last;
+      else if ((index === 0 && !answer) || last - first + 1 === count) resolvedPage = first + index;
+      else return "";
+    }
+    const bookId = getActiveBookId();
+    return bookId ? `pdf-source-page://${encodeURIComponent(bookId)}/${encodeURIComponent(question.id)}/${resolvedPage}` : "";
   }
+  if (source && answer) return "";
+  if (!Number.isFinite(question.pageStart) || question.pageStart <= 0 || question.questionImage?.startsWith("custom://")) return "";
   const bookId = getActiveBookId();
   const pageFile = `page_${String(question.pageStart).padStart(3, "0")}.png`;
-  if (bookId) {
-    return `books/${bookId}/pages/${pageFile}`;
-  }
-  return `pages/${pageFile}`;
+  return bookId ? `books/${bookId}/pages/${pageFile}` : `pages/${pageFile}`;
 }
 
 function isNonEmptyPath(value: string | null | undefined): value is string {

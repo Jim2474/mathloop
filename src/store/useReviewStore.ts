@@ -42,6 +42,8 @@ type ReviewState = {
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
   isReady: boolean;
+  readyBookId: string | null;
+  loadError: string | null;
   setReady: () => void;
   initializeCards: (questions: Question[]) => void;
   syncQuestionLibrary: (questions: Question[]) => ReviewSyncResult;
@@ -87,7 +89,9 @@ export const useReviewStore = create<ReviewState>()(
       hasHydrated: false,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       isReady: false,
-      setReady: () => set({ isReady: true }),
+      readyBookId: null,
+      loadError: null,
+      setReady: () => set({ isReady: true, readyBookId: getActiveBookId() }),
       initializeCards: (questions) => {
         get().syncQuestionLibrary(questions);
       },
@@ -140,7 +144,7 @@ export const useReviewStore = create<ReviewState>()(
           let safeMistakeRecords = state.mistakeRecords;
           let safeReviewLogs = state.reviewLogs;
           let safeDailySession = state.dailyReviewSession;
-          if (Object.keys(safeMistakeRecords).length === 0) {
+          if (!isTauriRuntime() && Object.keys(safeMistakeRecords).length === 0) {
             try {
               const raw = localStorage.getItem(
                 `${REVIEW_STORAGE_KEY}::${getActiveBookId() || ''}`
@@ -472,7 +476,13 @@ export const useReviewStore = create<ReviewState>()(
     {
       name: REVIEW_STORAGE_KEY,
       storage: createJSONStorage(() => createReviewPersistStorage()),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          setSwitchingBook(true);
+          queueMicrotask(() => useReviewStore.setState({ hasHydrated: true,
+            loadError: "复习数据读取失败，已暂停写入以保护已有数据。" }));
+          return;
+        }
         state?.setHasHydrated(true);
       },
       partialize: (state) => ({
@@ -523,8 +533,14 @@ function getLocalDateKey(date: Date): string {
 const reviewStorage = createReviewPersistStorage();
 let previousBookId: string | null = null;
 let needsInitialLoad = true;
+let reviewLoadGeneration = 0;
 
 async function loadReviewForCurrentBook() {
+  const bookId = getActiveBookId();
+  const generation = ++reviewLoadGeneration;
+  setSwitchingBook(true);
+  useReviewStore.setState({ isReady: false, readyBookId: null, loadError: null });
+  let succeeded = false;
   try {
     let stored: string | null = null;
     const result = reviewStorage.getItem(REVIEW_STORAGE_KEY);
@@ -534,8 +550,12 @@ async function loadReviewForCurrentBook() {
       stored = result as string | null;
     }
 
-    if (!hasRealReviewData(stored)) {
+    if (generation !== reviewLoadGeneration || bookId !== getActiveBookId()) return;
+    // Legacy global state belongs only to the original book, not every new
+    // book that happens to have no reviews yet.
+    if (stored === null && (bookId === "book001" || bookId === "default")) {
       const legacy = await tryMigrateLegacyReviewState();
+      if (generation !== reviewLoadGeneration || bookId !== getActiveBookId()) return;
       if (legacy) {
         reviewStorage.setItem(REVIEW_STORAGE_KEY, legacy);
         stored = legacy;
@@ -543,20 +563,17 @@ async function loadReviewForCurrentBook() {
     }
 
     applyStoredReviewState(stored);
+    succeeded = true;
+  } catch (error) {
+    console.error("读取复习数据失败，已暂停写入以保护已有数据", error);
+    if (generation === reviewLoadGeneration && bookId === getActiveBookId()) {
+      useReviewStore.setState({ loadError: "复习数据读取失败，已暂停写入。请重新选择书本或重启应用。" });
+    }
   } finally {
-    setSwitchingBook(false);
-    useReviewStore.getState().setReady();
-  }
-}
-
-function hasRealReviewData(stored: string | null): boolean {
-  if (!stored) return false;
-  try {
-    const parsed = JSON.parse(stored);
-    const inner = parsed.state ?? parsed;
-    return Array.isArray(inner.reviewLogs) && inner.reviewLogs.length > 0;
-  } catch {
-    return false;
+    if (generation === reviewLoadGeneration && bookId === getActiveBookId() && succeeded) {
+      setSwitchingBook(false);
+      useReviewStore.getState().setReady();
+    }
   }
 }
 
@@ -591,9 +608,19 @@ function applyStoredReviewState(stored: string | null | undefined) {
       const parsed = JSON.parse(stored);
       // Zustand-persist wraps state as { state: {...}, version: N }
       const inner = parsed.state ?? parsed;
-      useReviewStore.setState({ ...emptyState, ...inner });
+      if (!inner || typeof inner !== "object" || Array.isArray(inner)
+          || !inner.cards || typeof inner.cards !== "object" || Array.isArray(inner.cards)
+          || !Array.isArray(inner.reviewLogs)) throw new Error("Invalid review state");
+      useReviewStore.setState({
+        cards: inner.cards, reviewLogs: inner.reviewLogs,
+        mistakeRecords: inner.mistakeRecords ?? {},
+        questionFingerprints: inner.questionFingerprints ?? {},
+        lastSyncResult: inner.lastSyncResult ?? null,
+        dailyReviewSession: inner.dailyReviewSession ?? null,
+        settings: normalizeSettings(inner.settings),
+      });
     } catch {
-      useReviewStore.setState(emptyState);
+      throw new Error("已保存的复习数据格式错误，未覆盖现有数据");
     }
   } else {
     // When stored is null/undefined (e.g. newly created book with no saved review state),

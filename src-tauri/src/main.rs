@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tauri::{Manager, Runtime};
+mod pdf_import;
 
 const DB_FILE: &str = "mathloop.db";
 const REVIEW_TABLE_SQL: &str = "
@@ -60,10 +61,26 @@ fn bootstrap_mathloop_data<R: Runtime>(
             fs::create_dir_all(top_dir.join(child)).map_err(to_string)?;
         }
         copy_missing_resource_dir(&app, &format!("{}/data", legacy_src), &top_dir.join("data"))?;
-        copy_missing_resource_dir(&app, &format!("{}/questions", legacy_src), &top_dir.join("questions"))?;
-        copy_missing_resource_dir(&app, &format!("{}/answers", legacy_src), &top_dir.join("answers"))?;
-        copy_missing_resource_dir(&app, &format!("{}/pages", legacy_src), &top_dir.join("pages"))?;
-        copy_missing_resource_dir(&app, &format!("{}/question-fixes", legacy_src), &top_dir.join("question-fixes"))?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/questions", legacy_src),
+            &top_dir.join("questions"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/answers", legacy_src),
+            &top_dir.join("answers"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/pages", legacy_src),
+            &top_dir.join("pages"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/question-fixes", legacy_src),
+            &top_dir.join("question-fixes"),
+        )?;
         top_dir.clone()
     } else {
         let book_dir = top_dir.join("books").join(&book_id);
@@ -71,11 +88,31 @@ fn bootstrap_mathloop_data<R: Runtime>(
         for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
             fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
         }
-        copy_missing_resource_dir(&app, &format!("{}/data", book_resource), &book_dir.join("data"))?;
-        copy_missing_resource_dir(&app, &format!("{}/questions", book_resource), &book_dir.join("questions"))?;
-        copy_missing_resource_dir(&app, &format!("{}/answers", book_resource), &book_dir.join("answers"))?;
-        copy_missing_resource_dir(&app, &format!("{}/pages", book_resource), &book_dir.join("pages"))?;
-        copy_missing_resource_dir(&app, &format!("{}/question-fixes", book_resource), &book_dir.join("question-fixes"))?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/data", book_resource),
+            &book_dir.join("data"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/questions", book_resource),
+            &book_dir.join("questions"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/answers", book_resource),
+            &book_dir.join("answers"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/pages", book_resource),
+            &book_dir.join("pages"),
+        )?;
+        copy_missing_resource_dir(
+            &app,
+            &format!("{}/question-fixes", book_resource),
+            &book_dir.join("question-fixes"),
+        )?;
         book_dir
     };
 
@@ -117,14 +154,20 @@ fn review_store_get(key: String, book_id: Option<String>) -> Result<Option<Strin
 fn review_store_set(key: String, value: String, book_id: Option<String>) -> Result<(), String> {
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
-    let connection = Connection::open(db_path).map_err(to_string)?;
+    let mut connection = Connection::open(db_path).map_err(to_string)?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(to_string)?;
 
     let effective_key = match book_id {
         Some(ref bid) => review_key_for(bid, &key),
         None => key.clone(),
     };
 
-    connection
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(to_string)?;
+    transaction
         .execute(
             "INSERT INTO review_store (key, value, updated_at)
              VALUES (?1, ?2, ?3)
@@ -132,6 +175,12 @@ fn review_store_set(key: String, value: String, book_id: Option<String>) -> Resu
             params![effective_key, value, Local::now().to_rfc3339()],
         )
         .map_err(to_string)?;
+    if let Some(ref bid) = book_id {
+        if key == "openclaw-review-state" {
+            pdf_import::protect_reviewed_batches(&transaction, bid, &value)?;
+        }
+    }
+    transaction.commit().map_err(to_string)?;
     Ok(())
 }
 
@@ -168,7 +217,10 @@ fn load_questions_json<R: Runtime>(
                 return fs::read_to_string(path).map_err(to_string);
             }
             // Fallback to resource — use book-scoped path
-            match read_external_or_resource_file(&app, &format!("books/{}/data/questions.json", bid)) {
+            match read_external_or_resource_file(
+                &app,
+                &format!("books/{}/data/questions.json", bid),
+            ) {
                 Ok(content) => Ok(content),
                 // No questions.json found for this book (e.g. a screenshot-only custom book) — return empty array
                 Err(_) => Ok("[]".to_string()),
@@ -190,7 +242,10 @@ fn load_question_image_fixes_json<R: Runtime>(
             if path.exists() {
                 fs::read_to_string(path).map_err(to_string)
             } else {
-                read_external_or_resource_file(&app, &format!("books/{}/data/question-image-fixes.json", bid))
+                read_external_or_resource_file(
+                    &app,
+                    &format!("books/{}/data/question-image-fixes.json", bid),
+                )
             }
         }
         None => read_external_or_resource_file(&app, "data/question-image-fixes.json"),
@@ -207,8 +262,12 @@ fn load_question_image_fixes_json<R: Runtime>(
 /// This is read-only — it never modifies the staging dir or the source PDF.
 #[tauri::command]
 fn read_pdf_import_stage(book_id: String) -> Result<Option<String>, String> {
-    let book_dir = resolve_book_dir(&book_id)
-        .unwrap_or_else(|_| mathloop_data_dir().unwrap_or_default().join("books").join(&book_id));
+    let book_dir = resolve_book_dir(&book_id).unwrap_or_else(|_| {
+        mathloop_data_dir()
+            .unwrap_or_default()
+            .join("books")
+            .join(&book_id)
+    });
     let batch_path = book_dir.join("pdf-import").join("import_batch.json");
     if !batch_path.exists() {
         return Ok(None);
@@ -222,16 +281,17 @@ fn read_pdf_import_stage(book_id: String) -> Result<Option<String>, String> {
 /// e.g. "images/p040.png".
 /// This is read-only.
 #[tauri::command]
-fn load_staged_image_data_url(
-    book_id: String,
-    path_in_import: String,
-) -> Result<String, String> {
+fn load_staged_image_data_url(book_id: String, path_in_import: String) -> Result<String, String> {
     // Sanitize: prevent directory traversal
     if path_in_import.contains("..") {
         return Err("Invalid path: directory traversal not allowed.".to_string());
     }
-    let book_dir = resolve_book_dir(&book_id)
-        .unwrap_or_else(|_| mathloop_data_dir().unwrap_or_default().join("books").join(&book_id));
+    let book_dir = resolve_book_dir(&book_id).unwrap_or_else(|_| {
+        mathloop_data_dir()
+            .unwrap_or_default()
+            .join("books")
+            .join(&book_id)
+    });
     let img_path = book_dir.join("pdf-import").join(&path_in_import);
     if !img_path.exists() {
         return Err(format!("Staged image not found: {}", path_in_import));
@@ -278,7 +338,9 @@ fn update_question_tips(
     let questions_path = data_dir
         .as_ref()
         .map(|d| d.join("questions.json"))
-        .filter(|p| p.exists());
+        .filter(|p| {
+            p.exists() && !question_id.starts_with("pdf-") && !question_id.starts_with("custom-")
+        });
 
     if let Some(ref path) = questions_path {
         // ── Standard book path: update questions.json ─────────────────────────
@@ -303,8 +365,9 @@ fn update_question_tips(
         let backup_dir = mathloop_data_dir()?.join("backups");
         fs::create_dir_all(&backup_dir).map_err(to_string)?;
         let backup_path = backup_dir.join(format!(
-            "questions-before-tip-{}.json",
-            Local::now().format("%Y-%m-%d-%H-%M-%S")
+            "questions-before-tip-{}-{}.json",
+            Local::now().format("%Y-%m-%d-%H-%M-%S"),
+            uuid::Uuid::new_v4()
         ));
         fs::write(&backup_path, original).map_err(to_string)?;
 
@@ -326,6 +389,9 @@ fn update_question_tips(
         ensure_database(&db_path)?;
         let connection = Connection::open(&db_path).map_err(to_string)?;
 
+        connection
+            .busy_timeout(std::time::Duration::from_secs(10))
+            .map_err(to_string)?;
         let effective_book_id = book_id.as_deref().unwrap_or("default");
         let key = format!("tips::{}::{}", effective_book_id, question_id);
         let trimmed = tips.trim();
@@ -354,7 +420,9 @@ fn update_question_tips(
 /// Tips embedded in questions.json are NOT returned here — they are
 /// already part of the question objects loaded by load_questions_json.
 #[tauri::command]
-fn load_question_tips_map(book_id: String) -> Result<std::collections::HashMap<String, String>, String> {
+fn load_question_tips_map(
+    book_id: String,
+) -> Result<std::collections::HashMap<String, String>, String> {
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
     let connection = Connection::open(db_path).map_err(to_string)?;
@@ -372,10 +440,7 @@ fn load_question_tips_map(book_id: String) -> Result<std::collections::HashMap<S
         .filter_map(Result::ok)
         .map(|(key, value)| {
             // Strip "tips::{bookId}::" prefix to get the raw questionId
-            let question_id = key
-                .strip_prefix(&prefix)
-                .unwrap_or(&key)
-                .to_string();
+            let question_id = key.strip_prefix(&prefix).unwrap_or(&key).to_string();
             (question_id, value)
         })
         .collect();
@@ -410,6 +475,9 @@ fn list_books() -> Result<Vec<BookEntry>, String> {
 #[tauri::command]
 fn add_book(book_id: String, name: String) -> Result<BookEntry, String> {
     validate_book_id(&book_id)?;
+    if name.trim().is_empty() {
+        return Err("书本名称不能为空。".into());
+    }
 
     let db_path = mathloop_data_dir()?.join(DB_FILE);
     ensure_database(&db_path)?;
@@ -423,6 +491,11 @@ fn add_book(book_id: String, name: String) -> Result<BookEntry, String> {
     let book_dir = mathloop_data_dir()?.join("books").join(&book_id);
     for sub in ["data", "questions", "answers", "pages", "question-fixes"] {
         fs::create_dir_all(book_dir.join(sub)).map_err(to_string)?;
+    }
+
+    let questions_path = book_dir.join("data/questions.json");
+    if !questions_path.exists() {
+        fs::write(&questions_path, "[]").map_err(to_string)?;
     }
 
     let entry = BookEntry {
@@ -493,6 +566,8 @@ fn set_active_book<R: Runtime>(
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(pdf_import::ImportState::default())
         .invoke_handler(tauri::generate_handler![
             bootstrap_mathloop_data,
             list_books,
@@ -509,6 +584,20 @@ fn main() {
             load_asset_data_url,
             read_pdf_import_stage,
             load_staged_image_data_url,
+            pdf_import::pick_pdf_import_file,
+            pdf_import::start_pdf_import,
+            pdf_import::get_pdf_import_job,
+            pdf_import::get_pdf_import_preview,
+            pdf_import::load_pdf_preview_image,
+            pdf_import::confirm_pdf_import,
+            pdf_import::load_pdf_source_page,
+            pdf_import::cancel_pdf_import,
+            pdf_import::load_pdf_import_questions,
+            pdf_import::list_pdf_import_batches,
+            pdf_import::undo_pdf_import,
+            pdf_import::export_pdf_library_backup,
+            pdf_import::restore_pdf_library_backup,
+            pdf_import::backup_review_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MathLoop");
@@ -663,7 +752,10 @@ fn read_external_or_resource_bytes<R: Runtime>(
 ) -> Result<Vec<u8>, String> {
     // 1. Book-scoped external dir: MathLoop data dir/books/{bookId}/{path}
     if let Some(bid) = book_id {
-        let book_external = mathloop_data_dir()?.join("books").join(bid).join(relative_path);
+        let book_external = mathloop_data_dir()?
+            .join("books")
+            .join(bid)
+            .join(relative_path);
         if book_external.exists() {
             return fs::read(book_external).map_err(to_string);
         }
@@ -742,10 +834,11 @@ fn copy_dir_missing(source: &Path, target: &Path) -> Result<(), String> {
         if entry.file_type().map_err(to_string)?.is_dir() {
             copy_dir_missing(&source_path, &target_path)?;
         } else {
-            // Always copy — overwrites stale files from previous app versions.
-            // The bundled resource is the canonical source; the app data dir
-            // must reflect the currently installed version.
-            fs::copy(&source_path, &target_path).map_err(to_string)?;
+            // User question metadata and images may contain personal edits.
+            // Bootstrapping fills missing resources without replacing them.
+            if !target_path.exists() {
+                fs::copy(&source_path, &target_path).map_err(to_string)?;
+            }
         }
     }
     Ok(())
@@ -897,10 +990,8 @@ fn run_migration_v2(connection: &Connection, top_dir: &Path) -> Result<(), Strin
 
         // Update registry: remove "default", ensure book001
         let existing = read_registry_raw(connection)?;
-        let mut registry: Vec<BookEntry> = existing
-            .into_iter()
-            .filter(|e| e.id != "default")
-            .collect();
+        let mut registry: Vec<BookEntry> =
+            existing.into_iter().filter(|e| e.id != "default").collect();
         if !registry.iter().any(|e| e.id == "book001") {
             registry.push(BookEntry {
                 id: "book001".to_string(),
@@ -1061,7 +1152,9 @@ fn run_migration_v3(connection: &Connection) -> Result<(), String> {
 
         for (old_key, value, updated_at) in &rows {
             // Skip keys that already use the new format (contain "::" after prefix)
-            let suffix = old_key.strip_prefix(NEW_REVIEW_KEY_PREFIX).unwrap_or(old_key);
+            let suffix = old_key
+                .strip_prefix(NEW_REVIEW_KEY_PREFIX)
+                .unwrap_or(old_key);
             if suffix.contains("::") {
                 continue; // Already migrated
             }
@@ -1193,7 +1286,8 @@ mod tests {
 
     #[test]
     fn resolves_windows_data_dir_from_appdata() {
-        let result = resolve_mathloop_data_dir("windows", Some("C:\\Users\\Alice\\AppData\\Roaming"), None);
+        let result =
+            resolve_mathloop_data_dir("windows", Some("C:\\Users\\Alice\\AppData\\Roaming"), None);
 
         assert_eq!(
             result,

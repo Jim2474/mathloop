@@ -8,11 +8,14 @@ import {
   readBackupFile,
 } from "../services/backupService";
 import { getLibrarySyncPreview } from "../services/librarySyncService";
+import { invokeDesktop, isTauriRuntime } from "../services/desktopBridge";
+import { flushReviewWrites } from "../services/reviewPersistStorage";
+import { exportPdfLibrary, restorePdfLibrary } from "../services/pdfImportService";
 import { useAssetUrl } from "../hooks/useAssetUrl";
 import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
-import type { ReviewSettings } from "../types/review";
+import type { ReviewBackupData, ReviewSettings } from "../types/review";
 
 type ImageStatus = "pending" | "ok" | "missing";
 
@@ -39,6 +42,27 @@ export default function BackupPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [storageTouched, setStorageTouched] = useState(0);
   const [imageStatuses, setImageStatuses] = useState<Record<string, ImageStatus>>({});
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [pendingReviewBackup, setPendingReviewBackup] = useState<{ backup: ReviewBackupData; bookId: string | null; name: string } | null>(null);
+
+  async function handlePdfLibrary(restore: boolean) {
+    if (!activeBookId) return;
+    const bookId = activeBookId;
+    setLibraryBusy(true); setMessage(null); setImportError(null);
+    try {
+      if (restore) {
+        const count = await restorePdfLibrary(bookId);
+        if (count === null) return;
+        if (useBookStore.getState().activeBookId === bookId) {
+          await useQuestionStore.getState().loadQuestions();
+        }
+        setMessage(`PDF 题库恢复完成，新增 ${count} 道题目。复习记录请使用 JSON 备份恢复。`);
+      } else if (await exportPdfLibrary(bookId)) {
+        setMessage("PDF 题库备份已保存，包含导入批次、题目、解析图片和保存的思路。复习记录请另存 JSON 备份。");
+      }
+    } catch (failure) { setImportError(String(failure)); }
+    finally { setLibraryBusy(false); }
+  }
 
   useEffect(() => {
     setSettingsDraft(settings);
@@ -132,19 +156,26 @@ export default function BackupPage() {
 
     try {
       const backup = await readBackupFile(file);
+      setPendingReviewBackup({ backup, bookId: activeBookId, name: file.name });
+    } catch (importFailure) {
+      const detail = importFailure instanceof Error ? importFailure.message : "导入失败。";
+      setImportError(detail);
+    }
+  }
 
-      if (backup.bookId && backup.bookId !== activeBookId) {
-        const confirmed = window.confirm(
-          `此备份来自《${backup.bookId}》，当前活跃书是《${currentBook?.name ?? activeBookId}》。确认导入吗？`,
-        );
-        if (!confirmed) return;
+  async function confirmReviewImport() {
+    if (!pendingReviewBackup) return;
+    const { backup, bookId, name } = pendingReviewBackup;
+    if (bookId !== useBookStore.getState().activeBookId) {
+      setPendingReviewBackup(null); setImportError("书本已切换，请重新选择备份。"); return;
+    }
+    setLibraryBusy(true);
+    try {
+      if (isTauriRuntime() && bookId) {
+        await flushReviewWrites(bookId);
+        await invokeDesktop<void>("backup_review_data");
       }
-
-      const confirmed = window.confirm("导入备份会覆盖当前本地复习状态，确定继续吗？");
-      if (!confirmed) {
-        return;
-      }
-
+      if (bookId !== useBookStore.getState().activeBookId) throw new Error("书本已切换，未恢复复习记录。");
       importReviewState({
         cards: backup.cards,
         reviewLogs: backup.reviewLogs,
@@ -155,12 +186,14 @@ export default function BackupPage() {
         dailyReviewSession: backup.dailyReviewSession,
       });
       syncQuestionLibrary(questions);
+      if (isTauriRuntime() && bookId) await flushReviewWrites(bookId);
+      setPendingReviewBackup(null);
       setStorageTouched((value) => value + 1);
-      setMessage(`导入成功：${file.name}`);
+      setMessage(`复习记录恢复成功：${name}`);
     } catch (importFailure) {
       const detail = importFailure instanceof Error ? importFailure.message : "导入失败。";
       setImportError(detail);
-    }
+    } finally { setLibraryBusy(false); }
   }
 
   function handleReset() {
@@ -324,7 +357,7 @@ export default function BackupPage() {
 
       <section className="grid gap-5 lg:grid-cols-2">
         <div className="apple-tile rounded-[26px] p-6">
-          <h3 className="text-2xl font-semibold tracking-[-0.28px]">备份与导入</h3>
+          <h3 className="text-2xl font-semibold tracking-[-0.28px]">复习记录备份与导入</h3>
           <p className="mt-2 text-sm leading-6 text-ink/60">
             导出的 JSON 包含 cards、reviewLogs、settings、exportedAt 和 version。
           </p>
@@ -341,6 +374,11 @@ export default function BackupPage() {
               <input type="file" accept="application/json,.json" onChange={handleImport} className="hidden" />
             </label>
           </div>
+          {pendingReviewBackup && <div className="mt-4 rounded-xl bg-cinnabar/5 p-4 text-sm">
+            <p>将用 {pendingReviewBackup.name} 覆盖当前《{currentBook?.name ?? activeBookId}》的复习记录。</p>
+            {pendingReviewBackup.backup.bookId && pendingReviewBackup.backup.bookId !== activeBookId && <p className="mt-2 text-cinnabar">注意：备份来自另一书本（{pendingReviewBackup.backup.bookId}），题目标识可能不匹配。</p>}
+            <div className="mt-3 flex gap-3"><button type="button" disabled={libraryBusy} onClick={() => void confirmReviewImport()} className="apple-danger-pill px-4 py-2">确认恢复复习记录</button><button type="button" disabled={libraryBusy} onClick={() => setPendingReviewBackup(null)} className="apple-ghost-pill px-4 py-2">取消</button></div>
+          </div>}
         </div>
 
         <div className="apple-tile rounded-[26px] p-6">
@@ -357,6 +395,15 @@ export default function BackupPage() {
           </button>
         </div>
       </section>
+
+      {isTauriRuntime() && <section className="apple-tile rounded-[26px] p-6">
+        <h3 className="text-2xl font-semibold">PDF 导入题库备份</h3>
+        <p className="mt-2 text-sm leading-6 text-ink/60">保存当前书本的 PDF 导入题目、解析图片、思路和批次记录。恢复时核对书本与图片校验值，已有内容发生冲突时会停止。此备份不包含旧题库、截图题和复习记录。</p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" disabled={libraryBusy || !activeBookId} onClick={() => void handlePdfLibrary(false)} className="apple-pill px-5 py-2.5 text-sm font-semibold disabled:opacity-40">{libraryBusy ? "正在处理…" : "导出 PDF 题库备份"}</button>
+          <button type="button" disabled={libraryBusy || !activeBookId} onClick={() => void handlePdfLibrary(true)} className="apple-ghost-pill px-5 py-2.5 text-sm font-semibold disabled:opacity-40">选择 PDF 题库备份并恢复</button>
+        </div>
+      </section>}
 
       <section className="apple-tile rounded-[26px] p-6">
         <h3 className="text-2xl font-semibold tracking-[-0.28px]">复习设置</h3>

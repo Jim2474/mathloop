@@ -1,9 +1,10 @@
+import { getQuestionLocator, getQuestionSourceName } from "../utils/questionLocation";
 import { Link, useParams } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
-import { getAnswerImagePaths, getQuestionImagePaths } from "../utils/questionImages";
+import { getAnswerImagePaths, getQuestionImagePaths, getQuestionPageImagePath } from "../utils/questionImages";
 import { getQuestionSectionLabel, inferQuestionType } from "../utils/questionStats";
 import { formatDateTime } from "../utils/date";
 import { stateLabel } from "../utils/reviewLabels";
@@ -53,6 +54,7 @@ export default function QuestionDetailPage() {
             <p className="mt-3 font-mono text-sm font-semibold text-slateblue">{question.id}</p>
             <h2 className="mt-2 text-4xl font-semibold tracking-[-0.28px] md:text-5xl">{question.questionNo}</h2>
             <p className="mt-3 text-sm text-ink/58">{question.bookName}</p>
+            <p className="mt-2 text-sm font-semibold text-slateblue">{getQuestionLocator(question)}</p>
           </div>
           <span
             className={[
@@ -70,6 +72,7 @@ export default function QuestionDetailPage() {
           <MetaItem label="小节" value={getQuestionSectionLabel(question)} />
           <MetaItem label="页码范围" value={question.pageRangeText} />
           <MetaItem label="PDF 页码" value={question.pdfPageLabel} />
+          {question.pdfSource && <MetaItem label="来源 PDF" value={getQuestionSourceName(question)} />}
           <MetaItem label="印刷页码" value={question.printedPageNumber} />
           <MetaItem label="源页" value={`${question.pageStart} - ${question.pageEnd}`} />
           <MetaItem label="状态" value={question.status || "未设置"} />
@@ -159,6 +162,8 @@ export default function QuestionDetailPage() {
                 key={path}
                 path={path}
                 alt={`${question.questionNo} 题目截图 ${index + 1}`}
+                fullPagePath={getQuestionPageImagePath(question, index)}
+                fullPageLabel={getQuestionLocator(question)}
               />
             ))}
           </div>
@@ -176,6 +181,8 @@ export default function QuestionDetailPage() {
                 key={path}
                 path={path}
                 alt={`${question.questionNo} 答案截图 ${index + 1}`}
+                fullPagePath={getQuestionPageImagePath(question, index, true)}
+                fullPageLabel={`${question.bookName} · 解析所在页`}
               />
             ))}
           </div>

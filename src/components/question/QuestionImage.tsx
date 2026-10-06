@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { useAssetUrl } from "../../hooks/useAssetUrl";
 
@@ -5,13 +6,14 @@ type QuestionImageProps = {
   path: string;
   alt: string;
   fullPagePath?: string;
+  fullPageLabel?: string;
 };
 
-export default function QuestionImage({ path, alt, fullPagePath }: QuestionImageProps) {
+export default function QuestionImage({ path, alt, fullPagePath, fullPageLabel }: QuestionImageProps) {
   const [showFullPage, setShowFullPage] = useState(false);
   const [failedUrl, setFailedUrl] = useState("");
   const image = useAssetUrl(path);
-  const fullPageImage = useAssetUrl(fullPagePath);
+  const fullPageImage = useAssetUrl(showFullPage ? fullPagePath : undefined);
   const failed = image.status === "error" || Boolean(image.url && failedUrl === image.url);
   const isLoading = image.status === "loading";
   const fullPageUrl = fullPageImage.status === "loaded" ? fullPageImage.url : "";
@@ -19,6 +21,16 @@ export default function QuestionImage({ path, alt, fullPagePath }: QuestionImage
   useEffect(() => {
     setFailedUrl("");
   }, [path, image.url]);
+
+  useEffect(() => { setShowFullPage(false); }, [path]);
+  useEffect(() => {
+    if (!showFullPage) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setShowFullPage(false); };
+    window.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", close); };
+  }, [showFullPage]);
 
   if (!path || image.status === "idle" || failed) {
     return (
@@ -38,7 +50,7 @@ export default function QuestionImage({ path, alt, fullPagePath }: QuestionImage
 
   return (
     <div className="overflow-hidden rounded-[20px] border border-white/56 bg-white/46 shadow-[0_18px_48px_rgba(29,29,31,0.07)] backdrop-blur">
-      {fullPageUrl ? (
+      {fullPagePath ? (
         <div className="flex justify-end border-b border-white/48 bg-white/32 px-3 py-2">
           <button
             type="button"
@@ -56,15 +68,15 @@ export default function QuestionImage({ path, alt, fullPagePath }: QuestionImage
         loading="lazy"
         onError={() => setFailedUrl(image.url)}
       />
-      {showFullPage && fullPageUrl ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/28 px-4 py-6 backdrop-blur-md">
+      {showFullPage ? createPortal(
+        <div role="dialog" aria-modal="true" aria-label="查看题目整页" className="fixed inset-0 z-50 flex items-center justify-center bg-ink/28 px-4 py-6 backdrop-blur-md">
           <div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/58 bg-white/76 shadow-[0_28px_90px_rgba(29,29,31,0.22)]">
             <div className="flex items-center justify-between gap-3 border-b border-white/50 px-5 py-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/42">
                   Full Page
                 </p>
-                <p className="mt-1 text-sm font-semibold text-ink/68">{fullPagePath}</p>
+                <p className="mt-1 text-sm font-semibold text-ink/68">{fullPageLabel || `${alt} 所在整页`}</p>
               </div>
               <button
                 type="button"
@@ -75,14 +87,14 @@ export default function QuestionImage({ path, alt, fullPagePath }: QuestionImage
               </button>
             </div>
             <div className="overflow-auto bg-white/42 p-4">
-              <img
+              {fullPageImage.status === "error" ? <p role="alert" className="p-8 text-center text-sm text-cinnabar">整页暂时无法读取。旧导入题目需要原 PDF 仍在原位置；新导入的题目已保存整页图片。</p> : !fullPageUrl ? <p className="p-8 text-center text-sm">正在读取整页…</p> : <img
                 src={fullPageUrl}
                 alt={`${alt} 所在整页`}
                 className="mx-auto h-auto max-h-none w-full max-w-4xl rounded-[18px] border border-line/70 bg-white shadow-[0_16px_42px_rgba(29,29,31,0.08)]"
-              />
+              />}
             </div>
           </div>
-        </div>
+        </div>, document.body
       ) : null}
     </div>
   );

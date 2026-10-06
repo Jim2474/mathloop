@@ -1,3 +1,4 @@
+import { getQuestionLocator } from "../utils/questionLocation";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import EmptyState from "../components/common/EmptyState";
@@ -252,8 +253,4 @@ export default function QuestionListPage() {
       )}
     </div>
   );
-}
-
-function getQuestionLocator(question: { printedPageNumber?: string; questionNo: string }): string {
-  return `印刷页 ${question.printedPageNumber || "未标注"} · 第 ${question.questionNo} 题`;
 }

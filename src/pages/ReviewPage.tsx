@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { getQuestionLocator, getQuestionSourceName } from "../utils/questionLocation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
@@ -20,9 +21,8 @@ const ratings: ReviewRating[] = ["Again", "Hard", "Good", "Easy"];
 
 export default function ReviewPage() {
   const { questions, isLoading, error, saveQuestionTips, getEffectiveTips } = useQuestionStore();
-  // Subscribe to the localTips map so we can react when a tip is saved in web mode.
-  // Tauri mode reloads the questions array instead, so currentQuestion?.tips changes there.
-  const localTips = useQuestionStore((state) => state.localTips);
+  // Saving tips updates this question in place and keeps the review route mounted.
+  const currentQuestionIdRef = useRef<string | undefined>(undefined);
   const {
     cards,
     reviewLogs,
@@ -61,7 +61,7 @@ export default function ReviewPage() {
     if (!isLoading && !error && questions.length > 0) {
       getOrCreateDailyReviewSession(questions, undefined, activeBookId);
     }
-  }, [error, getOrCreateDailyReviewSession, isLoading, questions]);
+  }, [activeBookId, error, getOrCreateDailyReviewSession, isLoading, questions, mistakeRecords]);
 
   const activeQueue = dailyReviewSession?.queue ?? [];
   const completedLogByQuestionId = useMemo(
@@ -79,7 +79,6 @@ export default function ReviewPage() {
     : null;
   const questionImagePaths = currentQuestion ? getQuestionImagePaths(currentQuestion) : [];
   const answerImagePaths = currentQuestion ? getAnswerImagePaths(currentQuestion) : [];
-  const fullPageImagePath = currentQuestion ? getQuestionPageImagePath(currentQuestion) : "";
   const dailyReviewOptions = getDailyReviewOptions(settings.maxDailyReviews);
   const isComplete =
     dailyReviewSession !== null &&
@@ -115,16 +114,14 @@ export default function ReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on completion state changes, not on every store update
   }, [isComplete, dailyReviewSession?.completedAt, dailyReviewSession?.roundId]);
 
+  currentQuestionIdRef.current = currentQuestion?.id;
   useEffect(() => {
     setTipsDraft(currentQuestion ? getEffectiveTips(currentQuestion.id) : "");
     setTipsMessage("");
     setIsSavingTips(false);
-    // localTips is intentionally included: web mode saves tips to localTips (not to
-    // currentQuestion.tips), so we need it to re-sync the textarea when the user switches
-    // back to a question whose tip was already saved.
-    // getEffectiveTips is a stable reference from Zustand and intentionally omitted.
+    // Reset drafts on navigation only; saving must not clear the success message.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQuestion?.id, currentQuestion?.tips, localTips, getEffectiveTips]);
+  }, [currentQuestion?.id]);
 
   function handleRating(rating: ReviewRating) {
     if (!currentQuestion || !dailyReviewSession) {
@@ -192,15 +189,17 @@ export default function ReviewPage() {
     if (!currentQuestion) {
       return;
     }
+    const savedId = currentQuestion.id;
     setIsSavingTips(true);
     setTipsMessage("");
     try {
-      await saveQuestionTips(currentQuestion.id, tipsDraft);
+      await saveQuestionTips(savedId, tipsDraft);
+      if (currentQuestionIdRef.current !== savedId) return;
       setTipsMessage(tipsDraft.trim() ? "解题思路已保存。" : "解题思路已清空。");
     } catch (error) {
-      setTipsMessage(error instanceof Error ? error.message : "保存解题思路失败。");
+      if (currentQuestionIdRef.current === savedId) setTipsMessage(error instanceof Error ? error.message : "保存解题思路失败。");
     } finally {
-      setIsSavingTips(false);
+      if (currentQuestionIdRef.current === savedId) setIsSavingTips(false);
     }
   }
 
@@ -320,6 +319,8 @@ export default function ReviewPage() {
             <p className="mt-3 text-sm text-ink/58">
               {getQuestionSectionLabel(currentQuestion)}
             </p>
+            <p className="mt-2 text-sm text-ink/58">{getQuestionSourceName(currentQuestion)}</p>
+            <p className="mt-2 text-base font-semibold text-slateblue">{getQuestionLocator(currentQuestion)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="apple-soft-card flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-ink/64">
@@ -414,7 +415,8 @@ export default function ReviewPage() {
               key={path}
               path={path}
               alt={`${currentQuestion.questionNo} 题目 ${index + 1}`}
-              fullPagePath={fullPageImagePath}
+              fullPagePath={getQuestionPageImagePath(currentQuestion, index)}
+              fullPageLabel={getQuestionLocator(currentQuestion)}
             />
           ))
         ) : (
@@ -464,6 +466,8 @@ export default function ReviewPage() {
                     key={path}
                     path={path}
                     alt={`${currentQuestion.questionNo} 答案 ${index + 1}`}
+                    fullPagePath={getQuestionPageImagePath(currentQuestion, index, true)}
+                    fullPageLabel={`${currentQuestion.bookName} · 解析所在页`}
                   />
                 ))
               ) : (
@@ -542,7 +546,7 @@ function TipsEditor({
         className="apple-control mt-3 min-h-24 w-full resize-y rounded-[18px] px-4 py-3 text-sm leading-6"
       />
       <p className="mt-2 text-xs text-ink/46">
-        {message || "桌面版保存前会自动备份外部 questions.json。"}
+        {message || "保存后会留在当前题目；复习评分后才会切换下一题。"}
       </p>
     </div>
   );
@@ -594,9 +598,6 @@ function getDailyReviewOptions(currentValue: number): number[] {
     .sort((left, right) => left - right);
 }
 
-function getQuestionLocator(question: { printedPageNumber?: string; questionNo: string }): string {
-  return `印刷页 ${question.printedPageNumber || "未标注"} · 第 ${question.questionNo} 题`;
-}
 
 const BACKED_UP_ROUNDS_KEY = "mathloop-backed-up-rounds";
 const MAX_BACKED_UP_ROUNDS = 20;

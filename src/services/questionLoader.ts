@@ -1,15 +1,21 @@
+import { enrichQuestionLocation } from "../utils/questionLocation";
 import type { Question } from "../types/question";
 import { setQuestionImageFixes } from "../utils/questionImages";
 import { getActiveBookId } from "../utils/bookId";
 import { initializeDesktopRuntime, invokeDesktop, isTauriRuntime } from "./desktopBridge";
 import { getCustomQuestions, getCustomQuestionsAsync } from "./customQuestionService";
 import { isCustomBook, loadCustomBookQuestions } from "./webBookService";
+import { mergeImportedQuestions } from "./pdfImportService";
 
 const DEFAULT_QUESTIONS_URL = "/data/questions.json";
 const DEFAULT_QUESTION_IMAGE_FIXES_URL = "/data/question-image-fixes.json";
 
-export async function loadOpenClawQuestions(): Promise<Question[]> {
-  const bookId = getActiveBookId();
+export async function loadOpenClawQuestions(bookId = getActiveBookId()): Promise<Question[]> {
+  async function withImports(base: Question[]): Promise<Question[]> {
+    if (!isTauriRuntime() || !bookId) return base;
+    const imported = await invokeDesktop<Question[]>("load_pdf_import_questions", { bookId });
+    return mergeImportedQuestions(base, imported).map(enrichQuestionLocation);
+  }
 
   // Custom books (screenshot-only, registered in localStorage) load from IndexedDB
   // This works in both web and Tauri (WKWebView supports localStorage + IndexedDB)
@@ -17,7 +23,7 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
     const questions = await loadCustomBookQuestions(bookId);
     // Use async version to recover screenshots from IndexedDB if localStorage was cleared
     const customQ = await getCustomQuestionsAsync(bookId);
-    return [...questions, ...customQ];
+    return withImports([...questions, ...customQ]);
   }
 
   if (isTauriRuntime()) {
@@ -32,7 +38,7 @@ export async function loadOpenClawQuestions(): Promise<Question[]> {
     // Also merge any pasted screenshot questions for this book (stored in IndexedDB)
     // Use async version so screenshots survive app restarts even if localStorage is cleared
     const customQ = bookId ? await getCustomQuestionsAsync(bookId) : [];
-    return [...(data as Question[]), ...customQ];
+    return withImports([...(data as Question[]), ...customQ]);
   }
 
   const questionsUrl = bookId

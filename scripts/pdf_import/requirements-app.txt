@@ -1,0 +1,4 @@
+PyMuPDF==1.26.5
+Pillow==11.3.0
+PyInstaller==6.16.0
+pyinstaller-hooks-contrib==2026.8

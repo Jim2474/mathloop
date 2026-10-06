@@ -1,1 +1,1 @@
-{}
+{"main-events":{"identifier":"main-events","description":"Allow the local main window to listen for native PDF import progress.","local":true,"windows":["main"],"permissions":["core:event:allow-listen","core:event:allow-unlisten"]}}

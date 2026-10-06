@@ -11,6 +11,7 @@ export type BootstrapInfo = {
 let bootstrapPromise: Promise<BootstrapInfo | null> | null = null;
 let lastBootstrappedBookId: string | undefined;
 let desktopDataDir = "";
+let bootstrapGeneration = 0;
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -24,14 +25,16 @@ export async function initializeDesktopRuntime(bookId?: string): Promise<Bootstr
     return bootstrapPromise;
   }
   lastBootstrappedBookId = bookId;
+  const generation = ++bootstrapGeneration;
   bootstrapPromise = invoke<BootstrapInfo>("bootstrap_mathloop_data", { bookId: bookId ?? null }).then((info) => {
-    desktopDataDir = info.dataDir;
+    if (generation === bootstrapGeneration) desktopDataDir = info.dataDir;
     return info;
   });
   return bootstrapPromise;
 }
 
 export function resetDesktopRuntime(): void {
+  bootstrapGeneration++;
   bootstrapPromise = null;
   desktopDataDir = "";
 }

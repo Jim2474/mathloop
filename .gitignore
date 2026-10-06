@@ -19,3 +19,6 @@ Thumbs.db
 
 # PDF import temporary output
 scripts/pdf_import/output/
+.venv-pdf-import/
+.pdf-worker-build/
+src-tauri/resources/pdf-import-worker/

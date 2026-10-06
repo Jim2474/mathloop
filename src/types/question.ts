@@ -1,4 +1,24 @@
 export type Question = {
+  pdfSource?: {
+    pdfPath: string;
+    pdfPageIndex: number;
+    pdfPageNumber?: number;
+    pdfPageLabel?: string;
+    sourceFingerprint?: string;
+    sourceKey?: string;
+    profileId?: string;
+    batchId?: string;
+    targetIndex?: number;
+    targetLabel?: string;
+    questionBoundingBox?: { x0: number; y0: number; x1: number; y1: number };
+    cropBoundingBox?: { x0: number; y0: number; x1: number; y1: number };
+    importedAt?: string;
+    importVersion?: number;
+    fullImage?: string;
+    pageImageNumbers?: number[];
+    questionPageNumbers?: number[];
+    answerPageNumbers?: number[];
+  };
   id: string;
   bookName: string;
   chapter: string;
@@ -13,6 +33,7 @@ export type Question = {
   tips?: string;
   questionImage: string;
   questionImages: string[];
+  pageImages?: string[];
   answerImage?: string | null;
   answerImages?: string[] | null;
   answerMeta?: {

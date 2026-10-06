@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { REVIEW_STORAGE_KEY } from "../services/backupService";
 import { useReviewStore } from "../store/useReviewStore";
 import { getActiveBookId } from "../utils/bookId";
-import { isTauriRuntime, invokeDesktop } from "../services/desktopBridge";
+import { getSwitchingBook } from "../services/reviewPersistStorage";
 
 function buildStorageKey(): string {
   const bookId = getActiveBookId();
@@ -11,6 +11,7 @@ function buildStorageKey(): string {
 
 function persistReviewState(): void {
   const state = useReviewStore.getState();
+  if (!state.isReady || state.readyBookId !== getActiveBookId() || getSwitchingBook()) return;
   const partialized = {
     cards: state.cards,
     reviewLogs: state.reviewLogs,
@@ -26,22 +27,9 @@ function persistReviewState(): void {
   // Always save to localStorage as a safety net
   localStorage.setItem(key, data);
 
-  // For Tauri: also flush to SQLite immediately on close
-  if (isTauriRuntime()) {
-    const bookId = getActiveBookId();
-    if (bookId) {
-      // Use synchronous approach for beforeunload — invokeDesktop is async,
-      // but the app's normal persist middleware already saved to SQLite
-      // on every state change. This is an extra safety net.
-      // Fire-and-forget: the browser may cancel this, but the middleware
-      // already persisted the last known-good state.
-      void invokeDesktop<void>("review_store_set", {
-        key: REVIEW_STORAGE_KEY,
-        value: data,
-        bookId,
-      });
-    }
-  }
+  // Native saves already use an ordered queue on every state change.
+  // A second fire-and-forget write here can overtake that queue and restore
+  // stale state, especially during an undo or book switch.
 }
 
 export function useBeforeUnloadSave(): void {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { isTauriRuntime, loadDesktopAssetDataUrl } from "../services/desktopBridge";
+import { invokeDesktop, isTauriRuntime, loadDesktopAssetDataUrl } from "../services/desktopBridge";
 import { getCustomQuestionImageUrl } from "../services/customQuestionService";
 import { getActiveBookId } from "../utils/bookId";
 
@@ -26,6 +26,18 @@ export function useAssetUrl(path: string | undefined): AssetUrlState {
       return () => {
         cancelled = true;
       };
+    }
+
+    if (normalizedPath.startsWith("pdf-preview://") || normalizedPath.startsWith("pdf-source-page://")) {
+      setState({ status: "loading", url: "" });
+      const [scope, ...parts] = normalizedPath.split("://");
+      const segments = parts.join("://").split("/").map(decodeURIComponent);
+      const request = scope === "pdf-preview"
+        ? invokeDesktop<string>("load_pdf_preview_image", { jobId: segments[0], name: segments[1] })
+        : invokeDesktop<string>("load_pdf_source_page", { bookId: segments[0], questionId: segments[1], pageNumber: Number(segments[2]) });
+      void request.then((url) => { if (!cancelled) setState({ status: "loaded", url }); })
+        .catch(() => { if (!cancelled) setState({ status: "error", url: "" }); });
+      return () => { cancelled = true; };
     }
 
     // Handle custom:// protocol (user-pasted screenshots stored in IndexedDB)

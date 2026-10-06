@@ -20,6 +20,7 @@ type PersistedQuestionState = {
 type QuestionState = PersistedQuestionState & {
   questions: Question[];
   isLoading: boolean;
+  loadedBookId: string | null;
   error: string | null;
   loadQuestions: () => Promise<void>;
   saveQuestionTips: (questionId: string, tips: string) => Promise<void>;
@@ -30,6 +31,8 @@ type QuestionState = PersistedQuestionState & {
   setSearchTerm: (searchTerm: string) => void;
   resetFilters: () => void;
 };
+
+let loadGeneration = 0;
 
 const initialFilters: PersistedQuestionState = {
   selectedChapter: "all",
@@ -45,21 +48,25 @@ export const useQuestionStore = create<QuestionState>()(
       ...initialFilters,
       questions: [],
       isLoading: false,
+      loadedBookId: null,
       error: null,
       loadQuestions: async () => {
-        set({ isLoading: true, error: null });
+        const generation = ++loadGeneration;
+        const bookId = getActiveBookId();
+        set({ isLoading: true, error: null, loadedBookId: null });
         try {
-          const questions = await loadOpenClawQuestions();
+          const questions = await loadOpenClawQuestions(bookId);
+          if (generation !== loadGeneration || bookId !== getActiveBookId()) return;
 
           // In Tauri mode, merge SQLite-backed tips (for custom/screenshot books)
           // into localTips so getEffectiveTips() works without an async call.
           // Tips stored in questions.json are already part of each Question object
           // and handled by the `question?.tips` fallback in getEffectiveTips.
           if (isTauriRuntime()) {
-            const bookId = getActiveBookId();
             if (bookId) {
               try {
                 const sqliteTips = await loadDesktopQuestionTipsMap(bookId);
+                if (generation !== loadGeneration || bookId !== getActiveBookId()) return;
                 if (Object.keys(sqliteTips).length > 0) {
                   set((state) => ({
                     // SQLite is the source of truth: merge on top of any cached localTips,
@@ -73,47 +80,27 @@ export const useQuestionStore = create<QuestionState>()(
             }
           }
 
-          set({ questions, isLoading: false, error: null });
+          if (generation === loadGeneration && bookId === getActiveBookId()) {
+            set({ questions, isLoading: false, error: null, loadedBookId: bookId });
+          }
         } catch (error) {
+          if (generation !== loadGeneration || bookId !== getActiveBookId()) return;
           const message = error instanceof Error ? error.message : "读取题库失败。";
-          set({ questions: [], isLoading: false, error: message });
+          set({ questions: [], isLoading: false, error: message, loadedBookId: null });
         }
       },
       saveQuestionTips: async (questionId, tips) => {
+        const bookId = getActiveBookId();
+        const trimmed = tips.trim();
         if (isTauriRuntime()) {
-          const bookId = getActiveBookId();
-          await updateDesktopQuestionTips(questionId, tips, bookId ?? undefined);
-
-          // Update localTips immediately so the UI reflects the change without
-          // waiting for a full question reload.  For standard books the tips field
-          // is also embedded in questions.json, so we reload questions too.
-          const trimmed = tips.trim();
-          set((state) => {
-            const next = { ...state.localTips };
-            if (trimmed) {
-              next[questionId] = trimmed;
-            } else {
-              delete next[questionId];
-            }
-            return { localTips: next };
-          });
-
-          // Reload questions to pick up tips embedded in questions.json (standard books).
-          // For custom books this is a no-op since their tips come from localTips above.
-          const questions = await loadOpenClawQuestions();
-          set({ questions, error: null });
-        } else {
-          const trimmed = tips.trim();
-          set((state) => {
-            const next = { ...state.localTips };
-            if (trimmed) {
-              next[questionId] = trimmed;
-            } else {
-              delete next[questionId];
-            }
-            return { localTips: next };
-          });
+          await updateDesktopQuestionTips(questionId, trimmed, bookId ?? undefined);
         }
+        if (bookId !== getActiveBookId()) return;
+        // Keep the review route mounted and preserve its current question/answer state.
+        set((state) => ({
+          localTips: { ...state.localTips, [questionId]: trimmed },
+          questions: state.questions.map((q) => q.id === questionId ? { ...q, tips: trimmed } : q),
+        }));
       },
       getEffectiveTips: (questionId) => {
         const state = get();
@@ -143,4 +130,3 @@ export const useQuestionStore = create<QuestionState>()(
     },
   ),
 );
-

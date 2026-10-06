@@ -8,6 +8,17 @@ function bookScopedKey(name: string): string {
 }
 
 let isSwitchingBook = false;
+const pendingWrites = new Map<string, Promise<void>>();
+const writeErrors = new Map<string, unknown>();
+
+export async function flushReviewWrites(bookId: string): Promise<void> {
+  let latest: Promise<void> | undefined;
+  do {
+    latest = pendingWrites.get(bookId);
+    await latest;
+  } while (latest !== pendingWrites.get(bookId));
+  if (writeErrors.has(bookId)) throw new Error("复习数据尚未成功保存，请稍后重试撤销。");
+}
 
 export function setSwitchingBook(v: boolean): void {
   isSwitchingBook = v;
@@ -64,21 +75,24 @@ export function createReviewPersistStorage(): StateStorage {
     getItem: async (name) => {
       const bookId = getActiveBookId();
       if (!bookId) return null;
-      try {
-        return await invokeDesktop<string | null>("review_store_get", { key: name, bookId });
-      } catch {
-        return null;
-      }
+      await flushReviewWrites(bookId);
+      return invokeDesktop<string | null>("review_store_get", { key: name, bookId });
     },
     setItem: async (name, value) => {
       if (isSwitchingBook) return;
       const bookId = getActiveBookId();
       if (!bookId) return;
-      try {
-        await invokeDesktop<void>("review_store_set", { key: name, value, bookId });
-      } catch (error) {
-        console.error("Failed to persist review state:", error);
-      }
+      const next = (pendingWrites.get(bookId) ?? Promise.resolve()).then(async () => {
+        try {
+          await invokeDesktop<void>("review_store_set", { key: name, value, bookId });
+          writeErrors.delete(bookId);
+        } catch (error) {
+          writeErrors.set(bookId, error);
+          console.error("Failed to persist review state:", error);
+        }
+      });
+      pendingWrites.set(bookId, next);
+      await next;
     },
     removeItem: async (name) => {
       const bookId = getActiveBookId();
