@@ -2,11 +2,12 @@ export type PdfPageRef = {
   pdfPath: string;
   sourceFingerprint: string;
   pdfPageNumber: number;
+  printedPageNumber?: string;
   pageImageIndex: number;
 };
 
 export type Question = {
-  exam?: { year: number; subject: string; questionNumber: number; markedParts: string[] };
+  exam?: { year: number; subject: string; questionNumber: number; markedParts: string[]; sectionLabel?: string };
   pdfSource?: {
     pdfPath: string;
     pdfPageIndex: number;

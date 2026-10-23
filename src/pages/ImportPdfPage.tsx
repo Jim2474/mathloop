@@ -105,7 +105,8 @@ export default function ImportPdfPage() {
       if (!selected) return;
       setInput(selected);
       setAnswerMatches([]);
-      setNewBookName(selected.profileId === "math2-exams-2010-2026" ? "数学二真题错题" : `${selected.name}·错题`);
+      setNewBookName(selected.profileId === "math2-exams-2010-2026" ? "数学二真题错题"
+        : selected.profileId === "cjlu-control-exams" ? "自动控制原理真题错题" : `${selected.name}·错题`);
       const suggested = selected.boundBookId ?? (selected.profileId.startsWith("wzx")
         ? books.find((b) => b.id === "book005")?.id
         : selected.profileId.startsWith("linear")
@@ -213,7 +214,7 @@ export default function ImportPdfPage() {
       </div>
       <section className="rounded-3xl border border-white/70 bg-white/70 p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：高数与线代讲义的红笔批注、自控课本的蓝色批注、数学二真题套卷及独立答案</p></div>
+          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：高数与线代讲义的红笔批注、自控课本的蓝色批注、数学二真题及独立答案、自控真题红叉（不附答案）</p></div>
           <button type="button" disabled={busy || locked} onClick={() => void choose()} className="apple-pill px-5 py-2.5 text-sm font-semibold disabled:opacity-40">{busy ? "正在处理…" : input ? "更换 PDF" : "选择 PDF"}</button>
         </div>
         {input && <div className="mt-5 rounded-2xl bg-slateblue/5 p-4"><p className="font-medium">{input.name}</p><p className="mt-1 break-all text-xs text-ink/50">{input.pages} 页 · {input.pdfPath}</p></div>}

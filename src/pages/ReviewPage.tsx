@@ -471,7 +471,7 @@ export default function ReviewPage() {
                   />
                 ))
               ) : (
-                <EmptyState title={currentQuestion.answerMeta?.hasAnswer === false ? "原书未提供参考答案" : "暂无答案图片"} description={currentQuestion.answerMeta?.hasAnswer === false ? "可记录自己的解题思路，并根据掌握情况评分。" : undefined} />
+                <EmptyState title={currentQuestion.answerMeta?.hasAnswer === false ? "未附参考答案" : "暂无答案图片"} description={currentQuestion.answerMeta?.hasAnswer === false ? "可记录自己的解题思路，并根据掌握情况评分。" : undefined} />
               )}
             </div>
 

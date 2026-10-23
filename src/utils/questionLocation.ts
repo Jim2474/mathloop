@@ -18,7 +18,9 @@ export function enrichQuestionLocation(q: Question): Question {
 export function getQuestionLocator(q: Question): string {
   if (q.exam) {
     const parts = q.exam.markedParts.length ? ` · 标记小问：${q.exam.markedParts.join("、")}` : "";
-    return `${q.exam.year}年${q.exam.subject}真题 · 第${q.exam.questionNumber}题${parts} · PDF 第${q.pageStart === q.pageEnd ? q.pageStart : `${q.pageStart}–${q.pageEnd}`}页`;
+    const pages = q.pageStart === q.pageEnd ? String(q.pageStart) : `${q.pageStart}–${q.pageEnd}`;
+    const printed = q.printedPageNumber && q.printedPageNumber !== pages ? ` · 试卷册第${q.printedPageNumber}页` : "";
+    return `${q.exam.year}年${q.exam.subject}真题 · ${q.exam.sectionLabel ?? ""}第${q.exam.questionNumber}题${parts} · PDF 第${pages}页${printed}`;
   }
   const start = q.pdfSource?.pdfPageNumber ?? q.pageStart;
   const end = q.pageEnd || start;
@@ -36,6 +38,7 @@ export function getQuestionImageSourceLabel(q: Question, index = 0, answer = fal
   const ref = (answer ? q.pdfSource?.answerPageRefs : q.pdfSource?.questionPageRefs)?.[index];
   if (!ref) return answer ? `${q.bookName} · 解析所在页` : getQuestionLocator(q);
   const name = ref.pdfPath.split(/[\\/]/).pop();
-  const location = q.exam ? `${q.exam.year}年${q.exam.subject}真题 · 第${q.exam.questionNumber}题` : q.bookName;
-  return `${location} · ${name} · PDF 第${ref.pdfPageNumber}页`;
+  const location = q.exam ? `${q.exam.year}年${q.exam.subject}真题 · ${q.exam.sectionLabel ?? ""}第${q.exam.questionNumber}题` : q.bookName;
+  const printed = ref.printedPageNumber ? ` · 试卷册第${ref.printedPageNumber}页` : "";
+  return `${location} · ${name} · PDF 第${ref.pdfPageNumber}页${printed}`;
 }

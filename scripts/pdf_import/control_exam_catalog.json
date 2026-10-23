@@ -1,0 +1,1355 @@
+{
+  "fingerprint": "2e6902a6eaf76b525b486f2bf4f9dbfaf8d3b6182f2757dc81c28143c04bd340",
+  "questions": [
+    {
+      "year": 2005,
+      "number": 1,
+      "section": "计算题",
+      "parts": [
+        [
+          2,
+          [
+            0.02,
+            0.474,
+            0.96,
+            0.654
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2005,
+      "number": 2,
+      "section": "计算题",
+      "parts": [
+        [
+          2,
+          [
+            0.02,
+            0.654,
+            0.96,
+            0.808
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2005,
+      "number": 5,
+      "section": "计算题",
+      "parts": [
+        [
+          3,
+          [
+            0.11,
+            0.443,
+            0.97,
+            0.623
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2005,
+      "number": 6,
+      "section": "计算题",
+      "parts": [
+        [
+          3,
+          [
+            0.11,
+            0.623,
+            0.97,
+            0.704
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2005,
+      "number": 10,
+      "section": "计算题",
+      "parts": [
+        [
+          4,
+          [
+            0.025,
+            0.373,
+            0.96,
+            0.55
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2006,
+      "number": 3,
+      "section": "",
+      "parts": [
+        [
+          5,
+          [
+            0.13,
+            0.824,
+            0.97,
+            0.88
+          ]
+        ],
+        [
+          6,
+          [
+            0.2,
+            0.115,
+            0.9,
+            0.327
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2006,
+      "number": 4,
+      "section": "",
+      "parts": [
+        [
+          6,
+          [
+            0.025,
+            0.332,
+            0.95,
+            0.454
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2006,
+      "number": 5,
+      "section": "",
+      "parts": [
+        [
+          6,
+          [
+            0.025,
+            0.47,
+            0.97,
+            0.601
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2006,
+      "number": 6,
+      "section": "",
+      "parts": [
+        [
+          6,
+          [
+            0.025,
+            0.59,
+            0.97,
+            0.674
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2007,
+      "number": 1,
+      "section": "",
+      "parts": [
+        [
+          9,
+          [
+            0.14,
+            0.185,
+            0.98,
+            0.625
+          ]
+        ]
+      ],
+      "markedParts": [
+        "1"
+      ]
+    },
+    {
+      "year": 2007,
+      "number": 3,
+      "section": "",
+      "parts": [
+        [
+          10,
+          [
+            0.025,
+            0.124,
+            0.96,
+            0.261
+          ]
+        ]
+      ],
+      "markedParts": [
+        "3"
+      ]
+    },
+    {
+      "year": 2007,
+      "number": 6,
+      "section": "",
+      "parts": [
+        [
+          10,
+          [
+            0.015,
+            0.512,
+            0.96,
+            0.711
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2007,
+      "number": 8,
+      "section": "",
+      "parts": [
+        [
+          10,
+          [
+            0.025,
+            0.84,
+            0.97,
+            0.915
+          ]
+        ],
+        [
+          11,
+          [
+            0.13,
+            0.095,
+            0.97,
+            0.213
+          ]
+        ]
+      ],
+      "markedParts": [
+        "3"
+      ]
+    },
+    {
+      "year": 2008,
+      "number": 7,
+      "section": "",
+      "parts": [
+        [
+          13,
+          [
+            0.145,
+            0.6,
+            0.99,
+            0.816
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2008,
+      "number": 9,
+      "section": "",
+      "parts": [
+        [
+          14,
+          [
+            0.015,
+            0.35,
+            0.96,
+            0.515
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2009,
+      "number": 1,
+      "section": "",
+      "parts": [
+        [
+          15,
+          [
+            0.16,
+            0.164,
+            0.99,
+            0.503
+          ]
+        ]
+      ],
+      "markedParts": [
+        "1"
+      ]
+    },
+    {
+      "year": 2009,
+      "number": 2,
+      "section": "",
+      "parts": [
+        [
+          15,
+          [
+            0.16,
+            0.511,
+            0.99,
+            0.8
+          ]
+        ]
+      ],
+      "markedParts": [
+        "1"
+      ]
+    },
+    {
+      "year": 2009,
+      "number": 3,
+      "section": "",
+      "parts": [
+        [
+          15,
+          [
+            0.16,
+            0.808,
+            0.99,
+            0.86
+          ]
+        ],
+        [
+          16,
+          [
+            0.015,
+            0.103,
+            0.96,
+            0.259
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2009,
+      "number": 5,
+      "section": "",
+      "parts": [
+        [
+          16,
+          [
+            0.015,
+            0.449,
+            0.96,
+            0.6
+          ]
+        ]
+      ],
+      "markedParts": [
+        "2"
+      ]
+    },
+    {
+      "year": 2009,
+      "number": 7,
+      "section": "",
+      "parts": [
+        [
+          16,
+          [
+            0.015,
+            0.767,
+            0.96,
+            0.818
+          ]
+        ],
+        [
+          17,
+          [
+            0.08,
+            0.08,
+            0.99,
+            0.28
+          ]
+        ]
+      ],
+      "markedParts": [
+        "2"
+      ]
+    },
+    {
+      "year": 2009,
+      "number": 9,
+      "section": "",
+      "parts": [
+        [
+          17,
+          [
+            0.08,
+            0.498,
+            0.99,
+            0.681
+          ]
+        ]
+      ],
+      "markedParts": [
+        "2"
+      ]
+    },
+    {
+      "year": 2010,
+      "number": 3,
+      "section": "",
+      "parts": [
+        [
+          18,
+          [
+            0.005,
+            0.783,
+            0.96,
+            0.827
+          ]
+        ],
+        [
+          19,
+          [
+            0.14,
+            0.075,
+            0.99,
+            0.327
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2010,
+      "number": 5,
+      "section": "",
+      "parts": [
+        [
+          19,
+          [
+            0.14,
+            0.498,
+            0.99,
+            0.655
+          ]
+        ]
+      ],
+      "markedParts": [
+        "2"
+      ]
+    },
+    {
+      "year": 2010,
+      "number": 7,
+      "section": "",
+      "parts": [
+        [
+          19,
+          [
+            0.14,
+            0.841,
+            0.99,
+            0.887
+          ]
+        ],
+        [
+          20,
+          [
+            0.005,
+            0.105,
+            0.95,
+            0.254
+          ]
+        ]
+      ],
+      "markedParts": [
+        "1"
+      ]
+    },
+    {
+      "year": 2011,
+      "number": 1,
+      "section": "",
+      "parts": [
+        [
+          21,
+          [
+            0.16,
+            0.165,
+            0.99,
+            0.457
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2011,
+      "number": 2,
+      "section": "",
+      "parts": [
+        [
+          21,
+          [
+            0.15,
+            0.473,
+            0.99,
+            0.773
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2011,
+      "number": 3,
+      "section": "",
+      "parts": [
+        [
+          21,
+          [
+            0.16,
+            0.778,
+            0.99,
+            0.919
+          ]
+        ],
+        [
+          22,
+          [
+            0.015,
+            0.097,
+            0.97,
+            0.15
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2011,
+      "number": 4,
+      "section": "",
+      "parts": [
+        [
+          22,
+          [
+            0.015,
+            0.16,
+            0.97,
+            0.342
+          ]
+        ]
+      ],
+      "markedParts": [
+        "3"
+      ]
+    },
+    {
+      "year": 2011,
+      "number": 5,
+      "section": "",
+      "parts": [
+        [
+          22,
+          [
+            0.015,
+            0.347,
+            0.97,
+            0.43
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2011,
+      "number": 7,
+      "section": "",
+      "parts": [
+        [
+          22,
+          [
+            0.015,
+            0.609,
+            0.97,
+            0.812
+          ]
+        ]
+      ],
+      "markedParts": []
+    },
+    {
+      "year": 2011,
+      "number": 9,
+      "section": "",
+      "parts": [
+        [
+          23,
+          [
+            0.1,
+            0.211,
+            0.99,
+            0.44
+          ]
+        ]
+      ],
+      "markedParts": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "checkedInk": [
+    {
+      "page": 1,
+      "signature": "05bf1e8e9b4ef37ba38364f1c83b6ca3b2f33c93609516043a6182187dc971f2",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 1,
+      "signature": "c2c2bd071a24c6dbbb276f48bb2e51ed754f369a2a2095fb669425f7c6eb646d",
+      "result": "目录页笔迹，不是题目"
+    },
+    {
+      "page": 1,
+      "signature": "eb173726245b71fa47c6579b511fac9319bd69721c2884fb41617db95eafa624",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 1,
+      "signature": "30c5f685dd1fd1dd5e50e1b0c3b5e4ba7924419c2328ed8570b774bcff5e5319",
+      "result": "目录页笔迹，不是题目"
+    },
+    {
+      "page": 2,
+      "signature": "c81a7a3a318f7cd0145d84c8182aa6895b33865f01bcca4166100a6a2fd05fb7",
+      "target": [
+        2005,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 2,
+      "signature": "1f863fc7ff6aab7c04a89d4183fe8eaa42d3fb937cd9c324586d0b980f12fe6c",
+      "target": [
+        2005,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 2,
+      "signature": "7f08e0c4e7f00e4c34fbf178f20bdc8d21ca8c549ebcdff9ffe6e2443bef5de9",
+      "target": [
+        2005,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 2,
+      "signature": "0e897bc9149ff369fae1f10241f3a6d9a5386d38d36f541073dcbe6608c07a56",
+      "target": [
+        2005,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 3,
+      "signature": "2b79a8e4e6a6c21e8d8fc0385cc3b9ceea1f503294d23096d8b66af3a620da04",
+      "target": [
+        2005,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 3,
+      "signature": "d58bc938f02a3865be0bdea49584978a062328baad9c4ab99841b0df0e1e014f",
+      "target": [
+        2005,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 3,
+      "signature": "24d2e5ab47bcc508b36f93582da897d18dbf75b63f473d97edb037ef699e8a20",
+      "target": [
+        2005,
+        6
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 3,
+      "signature": "dd3b1f91526c41b6b867dd8fa47b2fca4b61b95174c29101bb7047b9588b9868",
+      "target": [
+        2005,
+        6
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 4,
+      "signature": "da72fb55a87b4dd363c3a87fa0d47a0e2a02d47b8fefc3ee01fa07bcc91878e1",
+      "result": "正文划线，不单独选题"
+    },
+    {
+      "page": 4,
+      "signature": "13db7300c46f9d6b86504541c52615923bda34de6b24d86f60f29f1a87f25b86",
+      "target": [
+        2005,
+        10
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 4,
+      "signature": "79b72869b89125e3233f48ea2a604e354bc08abc0ac024d6f8089fa0da3abb11",
+      "target": [
+        2005,
+        10
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 5,
+      "signature": "9b466ef0f41059a09234739ce18a496837007751dde65c121e7bf56dd4e2aade",
+      "target": [
+        2006,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 5,
+      "signature": "1e01913dd5f910d0501d82eafd47134a5e86022b218d4c2927fb85ab51ee3cd6",
+      "target": [
+        2006,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 5,
+      "signature": "982c0d1e949adffd543beb623329dd9ce158951e6b6a780662bce6d33ad5e304",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 5,
+      "signature": "9dfcd8e0024a9e4f975e5ecc773a7632bb3f5d7fbd6e28312a86b63603016f0b",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 5,
+      "signature": "5ff3811d6c55046c0abf1d55a2a228031675ee0a9178d038e91099d672ab9b33",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 5,
+      "signature": "1cf6fc895270eb922c90003a92d499fb193920f984edccda501a7ad6fbe46ee2",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 6,
+      "signature": "0c2e977210e5a9f711e93dc72d3c662728824fb312ccbf643f575d13ab7f3470",
+      "target": [
+        2006,
+        4
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 6,
+      "signature": "13cd082edf4be076fbb4b5618b11a12682057d71513c06faee4197c4454f4c41",
+      "target": [
+        2006,
+        4
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 6,
+      "signature": "a711d1fc703c928fa962dddbc0f6fdd5a8bd2fc120efd1b2df43ec6ce97bee54",
+      "target": [
+        2006,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 6,
+      "signature": "9adf290c01e9a1ec3ce21ca3203dda95d1cd079022ded464d742b97cbc127b21",
+      "target": [
+        2006,
+        6
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 6,
+      "signature": "733b7c7f08317a6cca4a73879bb26df6c577a22bcf1bf1d2f52281ecafd71e07",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "321169d5af9dd48e0a3043bf5ceb00cd567d7a45634f7a00f02a09b83d9199b0",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "04b8d552f16c2ccc5c2f66e61def3fe18663fbe8f39ea7dc82b5f5c6caf1ff70",
+      "result": "正文划线，不单独选题"
+    },
+    {
+      "page": 6,
+      "signature": "419606348f5ccf02f6bf6dc1eca9c0ef95c84cf5c814b9980a62ef6779c14de3",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "75f892f097fd0ad527dfd4f3ffda7ab0e1dfe33194579a13889a4807304354cb",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "a2a38de45fc0b4fdd2b335bf903bc539a1d735b79fb3f645c5b4aca2ac75aa3a",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "8ed5d96c823a978b36161c6c3dd5770f12be8e5c7883ace498fff93cc9a6526b",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 6,
+      "signature": "101ca7dcde9a4023726c6351fb9fffe07f97de47d887e550faf2f3c07bd97eb1",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 7,
+      "signature": "5a5229750b85f1ee2aa571894e0d1151b1590c1a4cb1d98e394f54fa3c4ec941",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 7,
+      "signature": "5702a37d40e8d6d4e7c5409df9038d5c4391a7233a11f90369618ce1babca443",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 7,
+      "signature": "9f25195ccbf474030edf7c1aac83ae5cca6af896e51109d06f3257ea594e3879",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 7,
+      "signature": "0f800ecda31d819754419e52436dda9fa7b33d505ef0022abed50c7eefef2103",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 7,
+      "signature": "876354e627d34cf6e44c40709d74635b37086a9ef94a4f4e68b81b339d447737",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 8,
+      "signature": "2c6ec9050132d1ec3fb4abfd8252aef7ce85f95ff19145a0c8cb54418e5110f8",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 8,
+      "signature": "46251c49c07e70993676d9645905c9922866c87de5ad895f5d95b8f301247c82",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 8,
+      "signature": "e3239ecb4ffe7de6cdd07b7df99803211e8c695726f3f1fc27a05f5bb282cc6a",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 8,
+      "signature": "01136b39dcb148d9bb79139c3f86cde88da08effcf5951ab2acce1cfc1997e5f",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 8,
+      "signature": "646fe3cf0377000e979907562d6b7dc95b8d3d40c1f028d2cc581072040e3a5c",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 9,
+      "signature": "251bf8ddd478fab1fc1086d426b7ae1e20543d0fab9424837c0265768a866f0f",
+      "target": [
+        2007,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 9,
+      "signature": "129e6fb98fdded4695435e304359591600be8920cb7dc5ff4293d3f22c7185de",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 9,
+      "signature": "95655003229d91ae4b049e4fe045511c4d4f7c1cb955f1bf140d706107c99ee4",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 9,
+      "signature": "7d09c1938fd37fd8fc0ec38ac40664b7e86110908cd7d4dfc14bc864f835e2d0",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 9,
+      "signature": "66e7080560477c9456deee6720fc14994ea711090c68c764952449004969c258",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 10,
+      "signature": "c9c169c473479b81d93a57129fc9e65316dfad7bdab5414a270eeb978151e9c5",
+      "target": [
+        2007,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 10,
+      "signature": "cc2489643931e58713a81f298ff9142638f5a9849d1712003879d7c12a54766f",
+      "target": [
+        2007,
+        6
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 10,
+      "signature": "79fea05d44bd4e5293e2d98c601b90c6ba41364da4062dc46548d6e176b6ab0e",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 10,
+      "signature": "36680b317cde04fd90d493252461b1f1e4cdb3bc2e3b329db524b63717fe3115",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 10,
+      "signature": "9df91f15ed5900a662bd7017883f7e4ffa32c8a89e6cb5ea620c6f7a13dc960f",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 10,
+      "signature": "4c1ef5cad252a83dc02e43115c67df6af12d45e057db96a432098684c6cc239b",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 10,
+      "signature": "db6351fbcc945807dba2ac971143e71d921e5d6904d5bee955561e38d07e4ea9",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 11,
+      "signature": "defb5607881975fce196da23fe0a36c3af6376b4884635cab990bb9ace530597",
+      "target": [
+        2007,
+        8
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 11,
+      "signature": "1b22fdaaef9353332c83ce666e3e949fd9ae6a04f31e377bfbe93f2ae55ffa29",
+      "result": "得分或扣分数字，不作为错题标记"
+    },
+    {
+      "page": 13,
+      "signature": "14f4233d451909d1b2a44b23c7cac8b34ba86ba7b2ac29007812d35b561676c0",
+      "target": [
+        2008,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 13,
+      "signature": "b063aa92897ddd22b1e66f9b5d082368f074f186d094b96c0e719d67c06bcb32",
+      "target": [
+        2008,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 14,
+      "signature": "ed526a3935b696a1e9bde458c67f5f279bed408d2ea11a5e2d25b2910ef327b0",
+      "target": [
+        2008,
+        9
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 14,
+      "signature": "f10043af7df8dda531f4a4da144c672e3091cdb655184bb0bae00d48a5f08596",
+      "target": [
+        2008,
+        9
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 15,
+      "signature": "cc5598a52c5c94a5398d18808ce7c8c301c2bbbdea717f42ec590a6198fc37c4",
+      "result": "图中补充标记，不单独选题"
+    },
+    {
+      "page": 15,
+      "signature": "5560d080295e6f1c6a53b8ecab9bbb5b5ad34fec8443cfe4f1fd2421b245b231",
+      "result": "图中补充标记，不单独选题"
+    },
+    {
+      "page": 15,
+      "signature": "8bd00205e2632085eb2557a132aa9d512e7978ed0b65d5bbc17d20f565ae77bf",
+      "target": [
+        2009,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 15,
+      "signature": "c31c51fe58ab2c7962b9d6a688d3257ffd8c41cfa9dc09471c6b90665799896c",
+      "target": [
+        2009,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 15,
+      "signature": "522ee1a78655340868c3d3e743b56251bb29840db4eaa09ea2f58cdc59eb0335",
+      "target": [
+        2009,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 15,
+      "signature": "81ef52b0e72ccbeba0cdf5213692491255dcfae080c1ff41c712c084f842bafc",
+      "target": [
+        2009,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 16,
+      "signature": "e7519a8475023e14cc9728361c06b3085bca77da5efd4dfb8a4630368810d082",
+      "target": [
+        2009,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 16,
+      "signature": "9cfc89e9f2deb806f8318d085902fa486e777856b6e72735542bad4c8b65025e",
+      "target": [
+        2009,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 16,
+      "signature": "153fa8da917d71e2b91454251960c2dc25e98cb03b83a74de08cfeaed0f11aa3",
+      "target": [
+        2009,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 16,
+      "signature": "c5e9ab261d4c4528f185f7115f03b7ca3550f18e8b558fc37353f7e5b68bf260",
+      "target": [
+        2009,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 17,
+      "signature": "ef00953cf012b8ad7527f78e1371f84fea5cacea973785075264c107de20737d",
+      "target": [
+        2009,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 17,
+      "signature": "b1793680a8ff539472a1cf2b99cbae1c15b74172c89aef2e7af507d842cb6d47",
+      "target": [
+        2009,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 17,
+      "signature": "e4f90dde6da3d89e514bd221bd1bf0c95ea72114dfa03783ae3c92b1b8a9d8c6",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 17,
+      "signature": "333ac18d953dab41c17e2f5afdb16562c15559789c2b4d760edc0b645f8eae18",
+      "target": [
+        2009,
+        9
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 17,
+      "signature": "3d0179de75670892da390ab47b80a670105613faf18eb4ef7b9b92da7c60af8b",
+      "target": [
+        2009,
+        9
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 17,
+      "signature": "694cc73a7bed3d3728ccf4ebd9358434da21f84a132f22a961daf6dfca3cbbc2",
+      "result": "忽略孤立小点"
+    },
+    {
+      "page": 18,
+      "signature": "beb02afffa0d39b871ffcba8f32d7bebe4eb3eeb338ebe6c08fe81c7146c0ad8",
+      "target": [
+        2010,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 18,
+      "signature": "18bfa5917d57065b1ae3476488a73100d0531071fdb689c9fe0a00cd1982587d",
+      "target": [
+        2010,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 19,
+      "signature": "1d234021eb13acd1aae8bb8b6b78be8c701928768e18e42b3417b5bb5a80c9ea",
+      "target": [
+        2010,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 19,
+      "signature": "57b48a4b2d93ab11aec695af4604155747e5d7a236c7c712b1d5575ff006e103",
+      "target": [
+        2010,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 20,
+      "signature": "ef76b192c0c77290fc2d3d317524272c2ae3980183ab071a349b393c5666e7a6",
+      "target": [
+        2010,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 20,
+      "signature": "898436cc4ca343cc0b311f8c80c61b730d9ca21bc8fc258fc6fd2a24afafb9de",
+      "target": [
+        2010,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "660064a0fdf91a7f0f280f1e97d81856cb609f55b55fb4a9c1deef2e8dbd163a",
+      "target": [
+        2011,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "eb02369f82c5649d1a8ddc5d65d0bc56046cb54e85071067d6a8811633de485c",
+      "target": [
+        2011,
+        3
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "28bfd5e0a8659e0bd10b43ce80cf8eacd480511b17ceb149d22d1e55f3a14a54",
+      "target": [
+        2011,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "f723745ad14da139a3fa52b0d3b4354f9b17d598dfa1938ac56b46da14b99715",
+      "target": [
+        2011,
+        2
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "8d2a6faf886deed60019fca0181f57522cf977a5cee94177f2a7342f2c20279a",
+      "target": [
+        2011,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 21,
+      "signature": "1b85307f093ea2cd25e3d9af94b72411be3dca9a0d847ab2597b35256cacf0a4",
+      "target": [
+        2011,
+        1
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "bebccf8fbde136c261a09cb1c2dd8b2bbd30af49438b35ee3ff63804e86f3e98",
+      "target": [
+        2011,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "b07b4b587953cdf69459b1b22b9476206d915c05eacac716f621f3e28d92fa4c",
+      "target": [
+        2011,
+        7
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "9edcea4ed34b02001dedbad434c1adf52576099ceb28737d195dcb72ee403be0",
+      "target": [
+        2011,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "97f86401453c25dcdb1068a4a6ccedfab9b59c49392411a3c4b4e561bba652f8",
+      "target": [
+        2011,
+        5
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "90a530ff46b107295ae47a981295e9e5440a96e84f5e0d51da266993225f4b0e",
+      "target": [
+        2011,
+        4
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 22,
+      "signature": "b9d09e5156a98a50d08e1e677d21a94c39bd5f85da9f3df418e2ae3c4688a325",
+      "target": [
+        2011,
+        4
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 23,
+      "signature": "63437d38bf9c764e6cf70c37ef89e0fc41678b3f72b06f08838eef778655d22e",
+      "target": [
+        2011,
+        9
+      ],
+      "result": "归入整题"
+    },
+    {
+      "page": 23,
+      "signature": "6cc214293af1016b64784e625d842d2f61b20e12784ef96b49f74e6386f82b6d",
+      "target": [
+        2011,
+        9
+      ],
+      "result": "归入整题"
+    }
+  ],
+  "printedPages": {
+    "2": 1,
+    "3": 2,
+    "4": 3,
+    "5": 4,
+    "6": 5,
+    "7": 6,
+    "8": 7,
+    "9": 8,
+    "10": 9,
+    "11": 10,
+    "12": 11,
+    "13": 12,
+    "14": 13,
+    "15": 14,
+    "16": 15,
+    "17": 16,
+    "18": 17,
+    "19": 18,
+    "20": 19,
+    "21": 20,
+    "22": 21,
+    "23": 22
+  }
+}

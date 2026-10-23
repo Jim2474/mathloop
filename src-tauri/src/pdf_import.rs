@@ -1490,8 +1490,32 @@ mod tests {
         assert!(validate_page_images(&q).is_err());
     }
     #[test]
+    fn answerless_exam_preserves_printed_pages_in_backup() {
+        let root=temp();let mut q=question("control");
+        q["answerImage"]=Value::Null;q["answerImages"]=json!([]);
+        q["answerMeta"]=json!({"hasAnswer":false,"note":"本次不附答案"});
+        q["pdfSource"]["answerPageRefs"]=json!([]);
+        q["pdfSource"]["questionPageRefs"][0]["printedPageNumber"]=json!("2");
+        q["pageImages"]=json!(["qp.png"]);
+        import(&root,q).unwrap();
+        let backup=root.join("control.mathloop");library_backup(&root,"math2",&backup).unwrap();
+        let restored=temp();assert_eq!(restore_library(&restored,"math2",&backup).unwrap(),1);
+        let saved=load_overlay(&restored,"math2").unwrap();
+        assert_eq!(saved[0]["pdfSource"]["questionPageRefs"][0]["printedPageNumber"],"2");
+        assert!(saved[0]["answerImage"].is_null());assert_eq!(saved[0]["answerImages"],json!([]));
+        fs::remove_dir_all(root).unwrap();fs::remove_dir_all(restored).unwrap();
+    }
+    #[test]
     #[ignore = "Run explicitly against a copied database and prepared source images"]
     fn real_math2_manifest_roundtrip_on_isolated_copy() {
+        real_manifest_roundtrip_on_isolated_copy(62);
+    }
+    #[test]
+    #[ignore = "Run explicitly against a copied database and prepared control exam images"]
+    fn real_control_manifest_roundtrip_on_isolated_copy() {
+        real_manifest_roundtrip_on_isolated_copy(31);
+    }
+    fn real_manifest_roundtrip_on_isolated_copy(expected: usize) {
         let root=PathBuf::from(std::env::var("MATHLOOP_QA_ROOT").unwrap());
         let source=PathBuf::from(std::env::var("MATHLOOP_QA_MANIFEST_DIR").unwrap());
         assert_ne!(root, mathloop_data_dir().unwrap());
@@ -1505,9 +1529,9 @@ mod tests {
         fs::create_dir_all(&staging).unwrap();
         for entry in fs::read_dir(&source).unwrap() { let entry=entry.unwrap();if entry.path().extension().is_some_and(|s| s=="png") {fs::copy(entry.path(),staging.join(entry.file_name())).unwrap();} }
         let input=InputInfo {pdf_path:"paper.pdf".into(),source_fingerprint:manifest["sourceFingerprint"].as_str().unwrap().into(),profile_id:"math2-exams-2010-2026".into(),name:"数学二真题".into(),pages:52,answers_dir:None,bound_book_id:None};
-        let batch=commit(&root,&staging,&id,"qa-math2","数学二真题错题",&input,manifest).unwrap();assert_eq!(batch.imported,62);
+        let batch=commit(&root,&staging,&id,"qa-math2","隔离验收题库",&input,manifest).unwrap();assert_eq!(batch.imported,expected);
         let backup=root.join("real-math2.mathloop");library_backup(&root,"qa-math2",&backup).unwrap();
-        let restored=temp();assert_eq!(restore_library(&restored,"qa-math2",&backup).unwrap(),62);
+        let restored=temp();assert_eq!(restore_library(&restored,"qa-math2",&backup).unwrap(),expected);
         assert_eq!(load_overlay(&restored,"qa-math2").unwrap(),load_overlay(&root,"qa-math2").unwrap());
         undo(&root,&batch.batch_id).unwrap();assert!(load_overlay(&root,"qa-math2").unwrap().is_empty());
         let after=connect(&root).unwrap();

@@ -97,7 +97,7 @@ export function getLibrarySyncPreview({
     if (getQuestionImagePaths(question).length === 0) {
       missingQuestionImageCount += 1;
     }
-    if (getAnswerImagePaths(question).length === 0) {
+    if (question.answerMeta?.hasAnswer !== false && getAnswerImagePaths(question).length === 0) {
       missingAnswerImageCount += 1;
     }
     if (question.meta?.uncertain) {

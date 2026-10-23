@@ -17,8 +17,10 @@ from PIL import Image
 from control_textbook import FINGERPRINT as CONTROL_FINGERPRINT, PROFILE as CONTROL_PROFILE, extract_control, render as render_control_page
 
 from math2_exams import FINGERPRINT as MATH2_FINGERPRINT, PROFILE as MATH2_PROFILE, extract_math2, answer_matches
+from control_exams import FINGERPRINT as CONTROL_EXAMS_FINGERPRINT, PROFILE as CONTROL_EXAMS_PROFILE, extract_control_exams, render as render_control_exam_page
 
 PROFILES = {
+    CONTROL_EXAMS_FINGERPRINT: CONTROL_EXAMS_PROFILE,
     MATH2_FINGERPRINT: MATH2_PROFILE,
     CONTROL_FINGERPRINT: CONTROL_PROFILE,
     "2982c22df232fcd23181ab865b147a0784e49259d7a0dd1bdb78d95a92da5006": {
@@ -387,7 +389,7 @@ def main():
         fingerprint = source_fingerprint(doc)
         profile = PROFILES.get(fingerprint)
         if not profile or len(doc) != profile["pages"]:
-            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。目前支持提供的高数、线代讲义、自控课本及数学二真题套卷；更改文件名仍可识别")
+            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。目前支持提供的高数、线代讲义、自控课本、数学二及自控真题套卷；更改文件名仍可识别")
         if args.inspect_answers:
             if profile["id"] != MATH2_PROFILE["id"]: raise ValueError("此资料无需独立答案目录")
             print(json.dumps(answer_matches(args.answers_dir, source_fingerprint), ensure_ascii=False), flush=True)
@@ -405,6 +407,8 @@ def main():
             if profile["id"] == CONTROL_PROFILE["id"]:
                 doc[42].set_rotation(180)
                 render_control_page(doc[args.render_page - 1], args.output)
+            elif profile["id"] == CONTROL_EXAMS_PROFILE["id"]:
+                render_control_exam_page(doc[args.render_page - 1], args.output)
             else:
                 doc[args.render_page - 1].get_pixmap(dpi=150, colorspace=fitz.csRGB, annots=True).save(args.output)
             after = os.stat(path)
@@ -416,6 +420,8 @@ def main():
         existing = json.loads(Path(args.existing).read_text()) if args.existing else []
         if profile["id"] == MATH2_PROFILE["id"]:
             result = extract_math2(doc, fingerprint, path, output, existing, emit, args.answers_dir, source_fingerprint)
+        elif profile["id"] == CONTROL_EXAMS_PROFILE["id"]:
+            result = extract_control_exams(doc, fingerprint, path, output, existing, emit)
         elif profile["id"] == CONTROL_PROFILE["id"]:
             result = extract_control(doc, fingerprint, path, output, existing, emit)
         else:

@@ -23,8 +23,10 @@ python = venv / 'bin/python'
 if not python.is_file():
     subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True)
 subprocess.run([str(python), '-m', 'pip', 'install', '-r', str(requirements)], check=True)
+catalog_args = [arg for path in sorted(worker.parent.glob('*_catalog.json'))
+                for arg in ('--add-data', str(path) + ':.')]
 subprocess.run([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
-                '--name', 'mathloop-pdf-worker', '--add-data', str(worker.parent / 'math2_catalog.json') + ':.', '--distpath', str(build / 'dist'),
+                '--name', 'mathloop-pdf-worker', *catalog_args, '--distpath', str(build / 'dist'),
                 '--workpath', str(build / 'work'), '--specpath', str(build), str(worker)], check=True)
 source = build / 'dist/mathloop-pdf-worker'
 if output.exists():
