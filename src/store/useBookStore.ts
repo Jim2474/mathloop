@@ -16,10 +16,19 @@ import {
   addCustomBook,
   removeCustomBook,
 } from "../services/webBookService";
+import {
+  applyBookPresentation,
+  emptyBookPresentation,
+  loadBookPresentation,
+  persistBookPresentation,
+  updateBookPresentation,
+  type BookPresentation,
+} from "../services/bookPresentationService";
 
 const ACTIVE_BOOK_KEY = "mathloop-active-book";
 const BOOKS_MANIFEST_URL = "/books.json";
 const DEFAULT_BOOK_ID = "book001";
+let booksLoadGeneration = 0;
 
 type BookState = {
   books: BookEntry[];
@@ -28,7 +37,12 @@ type BookState = {
   isLoaded: boolean;
   /** In-memory set of custom (screenshot-only) book IDs — do NOT rely on localStorage for this */
   customBookIds: Set<string>;
+  presentation: BookPresentation;
+  presentationError: string | null;
+  isPresentationReady: boolean;
+  isSavingPresentation: boolean;
   loadBooks: () => Promise<void>;
+  saveBookPresentation: (orderIds: string[], namesById: Record<string, string>) => Promise<void>;
   switchBook: (bookId: string) => Promise<void>;
   addBook: (bookId: string, name: string, questions?: unknown[]) => Promise<BookEntry>;
   removeBook: (bookId: string) => Promise<void>;
@@ -42,8 +56,35 @@ export const useBookStore = create<BookState>()(
       isSwitching: false,
       isLoaded: false,
       customBookIds: new Set<string>(),
+      presentation: emptyBookPresentation(),
+      presentationError: null,
+      isPresentationReady: false,
+      isSavingPresentation: false,
 
       loadBooks: async () => {
+        if (get().isSavingPresentation) return;
+        const generation = ++booksLoadGeneration;
+        set({ isPresentationReady: false, presentationError: null });
+        try {
+          const presentation = await loadBookPresentation();
+          if (generation !== booksLoadGeneration) return;
+          set({ presentation });
+        } catch (error) {
+          if (generation !== booksLoadGeneration) return;
+          set({
+            presentation: emptyBookPresentation(),
+            presentationError: `课本显示设置读取失败：${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+        const publishBooks = (books: BookEntry[], customBooks: BookEntry[]) => {
+          if (generation !== booksLoadGeneration) return;
+          set({
+            books: applyBookPresentation(books, get().presentation),
+            isLoaded: true,
+            isPresentationReady: get().presentationError === null,
+            customBookIds: new Set(customBooks.map((book) => book.id)),
+          });
+        };
         if (!isTauriRuntime()) {
           // ── Web mode ──────────────────────────────────────────────────
           try {
@@ -59,12 +100,8 @@ export const useBookStore = create<BookState>()(
                   ...builtinBooks,
                   ...customBooks.filter((b) => !seen.has(b.id)),
                 ];
-                set({
-                  books: merged,
-                  isLoaded: true,
-                  customBookIds: new Set(customBooks.map((b) => b.id)),
-                });
-                if (!get().activeBookId && merged.length > 0) {
+                publishBooks(merged, customBooks);
+                if (generation === booksLoadGeneration && !get().activeBookId && merged.length > 0) {
                   const defaultBook = merged.find((b) => b.id === DEFAULT_BOOK_ID) ?? merged[0];
                   set({ activeBookId: defaultBook.id });
                 }
@@ -74,7 +111,7 @@ export const useBookStore = create<BookState>()(
           } catch {
             // Fall through to empty state
           }
-          set({ books: [], isLoaded: true, customBookIds: new Set() });
+          publishBooks([], []);
           return;
         }
 
@@ -91,23 +128,34 @@ export const useBookStore = create<BookState>()(
             ...desktopBooks,
             ...customBooks.filter((b) => !seen.has(b.id)),
           ];
-          set({
-            books: merged,
-            isLoaded: true,
-            customBookIds: new Set(customBooks.map((b) => b.id)),
-          });
+          publishBooks(merged, customBooks);
         } catch {
           // Even if Rust fails, try to load at least the custom books
           try {
             const customBooks = await getCustomBooksAsync();
-            set({
-              books: customBooks,
-              isLoaded: true,
-              customBookIds: new Set(customBooks.map((b) => b.id)),
-            });
+            publishBooks(customBooks, customBooks);
           } catch {
-            set({ books: [], isLoaded: true, customBookIds: new Set() });
+            publishBooks([], []);
           }
+        }
+      },
+
+      saveBookPresentation: async (orderIds, namesById) => {
+        const state = get();
+        if (!state.isLoaded || !state.isPresentationReady || state.presentationError) {
+          throw new Error("课本显示设置尚未成功读取，暂时无法保存。请重新读取后重试。");
+        }
+        if (state.isSavingPresentation) throw new Error("正在保存课本显示设置，请稍候。");
+        const presentation = updateBookPresentation(state.presentation, state.books, orderIds, namesById);
+        set({ isSavingPresentation: true });
+        try {
+          await persistBookPresentation(presentation);
+          set((current) => ({
+            presentation,
+            books: applyBookPresentation(current.books, presentation),
+          }));
+        } finally {
+          set({ isSavingPresentation: false });
         }
       },
 
@@ -145,7 +193,7 @@ export const useBookStore = create<BookState>()(
         if (!isTauriRuntime() || questions !== undefined) {
           const entry = await addCustomBook(bookId, name, asQuestions);
           set((state) => ({
-            books: [...state.books, entry],
+            books: applyBookPresentation([...state.books, entry], state.presentation),
             customBookIds: new Set([...state.customBookIds, entry.id]),
           }));
           return entry;
@@ -153,7 +201,7 @@ export const useBookStore = create<BookState>()(
 
         // Tauri mode with no questions param: real disk-based book (advanced use case)
         const entry = await addDesktopBook(bookId, name);
-        set((state) => ({ books: [...state.books, entry] }));
+        set((state) => ({ books: applyBookPresentation([...state.books, entry], state.presentation) }));
         return entry;
       },
 

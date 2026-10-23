@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useBookStore } from "../../store/useBookStore";
 import { isTauriRuntime } from "../../services/desktopBridge";
+import ManageBooksDialog from "./ManageBooksDialog";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -13,10 +14,12 @@ const navItems = [
 ];
 
 export default function Navbar() {
-  const { books, activeBookId, isSwitching, switchBook, addBook } = useBookStore();
+  const { books, activeBookId, isSwitching, switchBook, addBook, presentationError, isLoaded, isPresentationReady } = useBookStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showManageDialog, setShowManageDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const bookPickerRef = useRef<HTMLButtonElement>(null);
 
   const currentBook = books.find((b) => b.id === activeBookId);
 
@@ -39,7 +42,9 @@ export default function Navbar() {
       {/* Book Dropdown */}
       <div className="relative" ref={dropdownRef}>
         <button
+          ref={bookPickerRef}
           type="button"
+          aria-expanded={dropdownOpen}
           onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={isSwitching}
           className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium tracking-[-0.224px] text-ink/58 transition hover:bg-white/45 hover:text-ink disabled:opacity-50"
@@ -58,6 +63,7 @@ export default function Navbar() {
               onClick={() => setDropdownOpen(false)}
             />
             <div className="absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-white/50 bg-white/90 shadow-xl backdrop-blur-xl">
+              {presentationError && <p role="alert" className="px-3 pt-3 text-xs text-cinnabar">{presentationError}</p>}
               <div className="max-h-64 overflow-auto p-1.5">
                 {books.map((book) => (
                   <button
@@ -76,6 +82,18 @@ export default function Navbar() {
                 ))}
               </div>
               <div className="border-t border-white/50 p-1.5">
+                <button
+                  type="button"
+                  disabled={!isLoaded || (!isPresentationReady && !presentationError)}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    setShowManageDialog(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ink/70 transition hover:bg-white/70 disabled:opacity-40"
+                >
+                  <span aria-hidden="true">↕</span>
+                  <span>管理课本</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -112,6 +130,10 @@ export default function Navbar() {
         </NavLink>
       ))}
 
+      {showManageDialog && <ManageBooksDialog onClose={() => {
+        setShowManageDialog(false);
+        bookPickerRef.current?.focus();
+      }} />}
       {/* Add Book Dialog */}
       {showAddDialog && (
         <AddBookDialog
