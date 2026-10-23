@@ -1,4 +1,4 @@
-import { getQuestionLocator, getQuestionSourceName } from "../utils/questionLocation";
+import { getQuestionLocator, getQuestionSourceName, getQuestionImageSourceLabel } from "../utils/questionLocation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
@@ -416,7 +416,7 @@ export default function ReviewPage() {
               path={path}
               alt={`${currentQuestion.questionNo} 题目 ${index + 1}`}
               fullPagePath={getQuestionPageImagePath(currentQuestion, index)}
-              fullPageLabel={getQuestionLocator(currentQuestion)}
+              fullPageLabel={getQuestionImageSourceLabel(currentQuestion, index)}
             />
           ))
         ) : (
@@ -467,7 +467,7 @@ export default function ReviewPage() {
                     path={path}
                     alt={`${currentQuestion.questionNo} 答案 ${index + 1}`}
                     fullPagePath={getQuestionPageImagePath(currentQuestion, index, true)}
-                    fullPageLabel={`${currentQuestion.bookName} · 解析所在页`}
+                    fullPageLabel={getQuestionImageSourceLabel(currentQuestion, index, true)}
                   />
                 ))
               ) : (

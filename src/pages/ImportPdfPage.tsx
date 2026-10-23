@@ -5,7 +5,7 @@ import { isTauriRuntime } from "../services/desktopBridge";
 import { loadOpenClawQuestions } from "../services/questionLoader";
 import { flushReviewWrites } from "../services/reviewPersistStorage";
 import { cancelPdfJob, claimCompletedPdfJob, confirmPdfJob, getPdfPreview, getPdfJob, listPdfBatches, pickPdfFile, startPdfJob, undoPdfBatch,
-  type PdfBatch, type PdfInput, type PdfJob, type PdfPreview } from "../services/pdfImportService";
+  pickAnswerDirectory, type AnswerMatch, type PdfBatch, type PdfInput, type PdfJob, type PdfPreview } from "../services/pdfImportService";
 import { useBookStore } from "../store/useBookStore";
 import { useQuestionStore } from "../store/useQuestionStore";
 import { useReviewStore } from "../store/useReviewStore";
@@ -21,6 +21,7 @@ export default function ImportPdfPage() {
   const reviewLogs = useReviewStore((s) => s.reviewLogs);
   const cards = useReviewStore((s) => s.cards);
   const readyBookId = useReviewStore((s) => s.readyBookId);
+  const [answerMatches, setAnswerMatches] = useState<AnswerMatch[]>([]);
   const [input, setInput] = useState<PdfInput | null>(null);
   const [targetId, setTargetId] = useState("");
   const [newBookName, setNewBookName] = useState("");
@@ -103,13 +104,24 @@ export default function ImportPdfPage() {
       const selected = await pickPdfFile();
       if (!selected) return;
       setInput(selected);
-      setNewBookName(`${selected.name}·错题`);
+      setAnswerMatches([]);
+      setNewBookName(selected.profileId === "math2-exams-2010-2026" ? "数学二真题错题" : `${selected.name}·错题`);
       const suggested = selected.boundBookId ?? (selected.profileId.startsWith("wzx")
         ? books.find((b) => b.id === "book005")?.id
         : selected.profileId.startsWith("linear")
           ? books.find((b) => b.name.includes("线代") || b.name.includes("线性代数"))?.id
           : undefined);
       setTargetId(suggested ?? "");
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function chooseAnswers() {
+    if (!input) return;
+    setBusy(true); setError(null);
+    try {
+      const chosen = await pickAnswerDirectory(input);
+      if (chosen) { setInput({ ...input, answersDir: chosen.path }); setAnswerMatches(chosen.matches); }
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
@@ -201,10 +213,15 @@ export default function ImportPdfPage() {
       </div>
       <section className="rounded-3xl border border-white/70 bg-white/70 p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：高数与线代讲义的红笔批注、自控课本已核对题目的蓝色批注</p></div>
+          <div><h2 className="font-semibold">1. 选择复习资料</h2><p className="mt-1 text-xs text-ink/50">已支持：高数与线代讲义的红笔批注、自控课本的蓝色批注、数学二真题套卷及独立答案</p></div>
           <button type="button" disabled={busy || locked} onClick={() => void choose()} className="apple-pill px-5 py-2.5 text-sm font-semibold disabled:opacity-40">{busy ? "正在处理…" : input ? "更换 PDF" : "选择 PDF"}</button>
         </div>
         {input && <div className="mt-5 rounded-2xl bg-slateblue/5 p-4"><p className="font-medium">{input.name}</p><p className="mt-1 break-all text-xs text-ink/50">{input.pages} 页 · {input.pdfPath}</p></div>}
+        {input?.profileId === "math2-exams-2010-2026" && <div className="mt-4 rounded-2xl border border-black/10 p-4">
+          <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">真题答案文件夹</p><button type="button" disabled={busy || locked} onClick={() => void chooseAnswers()} className="apple-ghost-pill px-4 py-2 text-sm">选择答案文件夹</button></div>
+          <p className="mt-2 break-all text-xs text-ink/60">{input.answersDir ?? "请选择按年份保存解析 PDF 的文件夹。题目和答案将分别保存来源整页。"}</p>
+          {answerMatches.length > 0 && <ul className="mt-3 grid gap-2 text-xs sm:grid-cols-2">{answerMatches.map((m) => <li key={m.year} className={m.status === "matched" ? "text-moss" : "text-cinnabar"}>{m.year}年：{m.detail}</li>)}</ul>}
+        </div>}
         <div className="mt-6 border-t border-black/5 pt-5">
           <label htmlFor="pdf-target" className="font-semibold">2. 选择这份资料对应的题库</label>
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -218,7 +235,7 @@ export default function ImportPdfPage() {
           </div>}
           {input?.boundBookId && <p className="mt-2 text-xs text-ink/50">这份资料已绑定对应题库，后续只追加到该书本。</p>}
           <div className="mt-5 flex flex-wrap items-center gap-4">
-            <button type="button" disabled={!input || !target || busy || locked} onClick={() => void start()} className="apple-pill px-6 py-3 text-sm font-semibold disabled:opacity-40">识别并预览</button>
+            <button type="button" disabled={!input || !target || busy || locked || (input.profileId === "math2-exams-2010-2026" && !input.answersDir)} onClick={() => void start()} className="apple-pill px-6 py-3 text-sm font-semibold disabled:opacity-40">识别并预览</button>
             <p className="text-xs text-ink/50">保留批注原迹 · 自动去重 · 原 PDF 只读</p>
           </div>
         </div>

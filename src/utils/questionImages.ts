@@ -44,6 +44,11 @@ export function getAnswerImagePaths(question: Question): string[] {
 
 export function getQuestionPageImagePath(question: Question, index = 0, answer = false): string {
   const source = question.pdfSource;
+  const refs = answer ? source?.answerPageRefs : source?.questionPageRefs;
+  if (refs) {
+    const ref = refs[index];
+    return ref ? question.pageImages?.[ref.pageImageIndex] ?? "" : "";
+  }
   const pages = answer ? source?.answerPageNumbers : source?.questionPageNumbers;
   const page = pages?.[index] ?? (answer ? question.answerMeta?.answerPageStart : question.pageStart) ?? question.pageStart;
   const fullIndex = source?.pageImageNumbers?.indexOf(page) ?? -1;

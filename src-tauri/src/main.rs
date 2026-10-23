@@ -585,6 +585,7 @@ fn main() {
             read_pdf_import_stage,
             load_staged_image_data_url,
             pdf_import::pick_pdf_import_file,
+            pdf_import::pick_pdf_answer_directory,
             pdf_import::start_pdf_import,
             pdf_import::get_pdf_import_job,
             pdf_import::get_pdf_import_preview,
@@ -604,6 +605,17 @@ fn main() {
 }
 
 fn mathloop_data_dir() -> Result<PathBuf, String> {
+    // Debug-only desktop acceptance testing against an explicit disposable copy.
+    // Release builds always use the normal user data directory.
+    #[cfg(debug_assertions)]
+    if let Some(value) = env::var_os("MATHLOOP_TEST_DATA_DIR") {
+        let root = PathBuf::from(value);
+        if !root.is_absolute() || !root.is_dir()
+            || !root.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("mathloop-qa-")) {
+            return Err("隔离测试目录必须是已存在的绝对路径，名称以 mathloop-qa- 开头".into());
+        }
+        return Ok(root);
+    }
     resolve_mathloop_data_dir(
         env::consts::OS,
         env::var("APPDATA").ok().as_deref(),

@@ -31,6 +31,8 @@ pub struct InputInfo {
     pub name: String,
     pub pages: usize,
     #[serde(default)]
+    pub answers_dir: Option<String>,
+    #[serde(default)]
     pub bound_book_id: Option<String>,
 }
 
@@ -152,6 +154,20 @@ fn worker_command(app: &tauri::AppHandle) -> Result<Command, String> {
     // A frozen Python worker must not inherit a user's Python configuration.
     command.env_remove("PYTHONHOME").env_remove("PYTHONPATH");
     Ok(command)
+}
+
+#[tauri::command]
+pub async fn pick_pdf_answer_directory(app: tauri::AppHandle, input: InputInfo) -> Result<Option<Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(folder) = app.dialog().file().blocking_pick_folder() else { return Ok(None); };
+        let path = folder.into_path().map_err(to_string)?;
+        let output = worker_command(&app)?.arg("--input").arg(&input.pdf_path)
+            .arg("--answers-dir").arg(&path).arg("--inspect-answers").output().map_err(to_string)?;
+        let text = String::from_utf8(output.stdout).map_err(to_string)?;
+        let value: Value = serde_json::from_str(text.lines().last().ok_or("未返回答案匹配结果")?).map_err(to_string)?;
+        if !output.status.success() { return Err(value["error"].as_str().unwrap_or("无法核对答案目录").into()); }
+        Ok(Some(json!({"path": path.to_string_lossy(), "matches": value["matches"]})))
+    }).await.map_err(to_string)?
 }
 
 #[tauri::command]
@@ -385,6 +401,11 @@ fn run_job(
         let state = job.lock().map_err(to_string)?;
         if state.status == "cancelled" {
             return Err("任务已取消".into());
+        }
+        if let Some(dir) = &input.answers_dir {
+            let path = Path::new(dir).canonicalize().map_err(to_string)?;
+            if !path.is_dir() { return Err("答案目录不存在".into()); }
+            worker.arg("--answers-dir").arg(path);
         }
         let process = worker
             .arg("--input")
@@ -653,9 +674,29 @@ fn validate_answer_images(q: &Value) -> Result<(), String> {
 fn validate_page_images(q: &Value) -> Result<(), String> {
     validate_answer_images(q)?;
     if q["pageImages"].is_null() {
+        if !q["pdfSource"]["questionPageRefs"].is_null() || !q["pdfSource"]["answerPageRefs"].is_null() {
+            return Err("多来源题目缺少已保存整页图片".into());
+        }
         return Ok(());
     }
     let images = q["pageImages"].as_array().ok_or("整页图片列表错误")?;
+    let source = &q["pdfSource"];
+    if !source["questionPageRefs"].is_null() || !source["answerPageRefs"].is_null() {
+        for (field, images_field) in [("questionPageRefs", "questionImages"), ("answerPageRefs", "answerImages")] {
+            let refs = source[field].as_array().ok_or("多来源整页引用缺失")?;
+            if refs.len() != q[images_field].as_array().ok_or("图片列表错误")?.len() { return Err("裁切图与来源数量不一致".into()); }
+            for r in refs {
+                let index = r["pageImageIndex"].as_u64().ok_or("整页图片索引错误")? as usize;
+                let fingerprint = r["sourceFingerprint"].as_str().ok_or("来源指纹缺失")?;
+                if index >= images.len() || r["pdfPageNumber"].as_u64().unwrap_or(0) == 0
+                    || r["pdfPath"].as_str().unwrap_or("").is_empty()
+                    || fingerprint.len() != 64 || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err("多来源整页引用错误".into());
+                }
+            }
+        }
+        return Ok(());
+    }
     let numbers = q["pdfSource"]["pageImageNumbers"]
         .as_array()
         .ok_or("整页页码缺失")?;
@@ -1083,7 +1124,8 @@ fn library_backup(root: &Path, book_id: &str, path: &Path) -> Result<(), String>
             tips.insert(id.to_string(), value);
         }
     }
-    let manifest = json!({"version":1, "bookId":book_id, "questions":questions, "batches":batches, "files":files, "tips":tips});
+    let version = if questions.iter().any(|q| !q["pdfSource"]["questionPageRefs"].is_null()) { 2 } else { 1 };
+    let manifest = json!({"version":version, "bookId":book_id, "questions":questions, "batches":batches, "files":files, "tips":tips});
     let temp = path.with_extension(format!("{}.tmp", Uuid::new_v4()));
     let result = (|| {
         let mut writer = zip::ZipWriter::new(fs::File::create(&temp).map_err(to_string)?);
@@ -1124,7 +1166,7 @@ fn restore_library(root: &Path, book_id: &str, path: &Path) -> Result<usize, Str
         .read_to_string(&mut text)
         .map_err(to_string)?;
     let manifest: Value = serde_json::from_str(&text).map_err(to_string)?;
-    if manifest["version"] != 1 || manifest["bookId"] != book_id {
+    if !matches!(manifest["version"].as_u64(), Some(1 | 2)) || manifest["bookId"] != book_id {
         return Err("备份版本不支持或不属于当前书本，未恢复数据".into());
     }
     let batches: Vec<Batch> =
@@ -1384,4 +1426,95 @@ pub async fn restore_pdf_library_backup(
     })
     .await
     .map_err(to_string)?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp() -> PathBuf {
+        let p = std::env::temp_dir().join(format!("mathloop-pdf-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&p).unwrap();
+        crate::ensure_database(&p.join(DB_FILE)).unwrap();
+        p
+    }
+    fn question(key: &str) -> Value {
+        json!({"id":"draft", "questionImage":"q.png", "questionImages":["q.png"],
+            "answerImage":"a.png", "answerImages":["a.png"], "pageImages":["qp.png","ap.png"],
+            "answerMeta":{"hasAnswer":true},
+            "pdfSource":{"sourceKey":key,"sourceFingerprint":"a".repeat(64),
+              "questionPageRefs":[{"pdfPath":"paper.pdf","sourceFingerprint":"a".repeat(64),"pdfPageNumber":3,"pageImageIndex":0}],
+              "answerPageRefs":[{"pdfPath":"answers.pdf","sourceFingerprint":"b".repeat(64),"pdfPageNumber":3,"pageImageIndex":1}]}})
+    }
+    fn import(root: &Path, q: Value) -> Result<Batch, String> {
+        let id = Uuid::new_v4().to_string();
+        let staging = root.join("pdf-import-staging").join(&id);
+        fs::create_dir_all(&staging).unwrap();
+        for file in ["q.png","a.png","qp.png","ap.png"] { fs::write(staging.join(file), b"image fixture").unwrap(); }
+        let input = InputInfo {pdf_path:"paper.pdf".into(),source_fingerprint:"a".repeat(64),profile_id:"test".into(),name:"test".into(),pages:52,answers_dir:None,bound_book_id:None};
+        commit(root, &staging, &id, "math2", "数学二真题错题", &input, json!({"questions":[q]}))
+    }
+    #[test]
+    fn separate_pdf_pages_validate_and_roundtrip_without_source_files() {
+        let root=temp(); let b=import(&root,question("one")).unwrap();
+        let saved=load_overlay(&root,"math2").unwrap();
+        assert_eq!(saved[0]["pdfSource"]["answerPageRefs"][0]["pageImageIndex"],1);
+        let backup=root.join("test.mathloop");library_backup(&root,"math2",&backup).unwrap();
+        let restored=temp();assert_eq!(restore_library(&restored,"math2",&backup).unwrap(),1);
+        assert_eq!(load_overlay(&restored,"math2").unwrap(),saved);
+        assert_eq!(restore_library(&restored,"math2",&backup).unwrap(),0);
+        assert_eq!(b.imported,1);
+        fs::remove_dir_all(root).unwrap();fs::remove_dir_all(restored).unwrap();
+    }
+    #[test]
+    fn duplicate_append_failure_undo_and_review_protection() {
+        let root=temp();let first=import(&root,question("one")).unwrap();
+        assert_eq!(import(&root,question("one")).unwrap().duplicates,1);
+        let second=import(&root,question("two")).unwrap();
+        let mut invalid=question("bad");invalid["pdfSource"]["answerPageRefs"][0]["pageImageIndex"]=json!(8);
+        assert!(import(&root,invalid).is_err());
+        assert_eq!(load_overlay(&root,"math2").unwrap().len(),2);
+        undo(&root,&second.batch_id).unwrap();assert_eq!(load_overlay(&root,"math2").unwrap().len(),1);
+        let c=connect(&root).unwrap();
+        let state=json!({"reviewLogs":[{"questionId":first.question_ids[0]}]});
+        protect_reviewed_batches(&c,"math2",&state.to_string()).unwrap();
+        protect_reviewed_batches(&c,"math2","{}").unwrap();
+        assert!(undo(&root,&first.batch_id).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn legacy_mapping_still_validates_and_incomplete_new_refs_fail_closed() {
+        let mut q=question("legacy");q["pdfSource"]=json!({"pageImageNumbers":[3,4],"questionPageNumbers":[3],"answerPageNumbers":[4]});
+        assert!(validate_page_images(&q).is_ok());
+        let mut q=question("bad");q["pdfSource"]["answerPageRefs"]=Value::Null;
+        assert!(validate_page_images(&q).is_err());
+    }
+    #[test]
+    #[ignore = "Run explicitly against a copied database and prepared source images"]
+    fn real_math2_manifest_roundtrip_on_isolated_copy() {
+        let root=PathBuf::from(std::env::var("MATHLOOP_QA_ROOT").unwrap());
+        let source=PathBuf::from(std::env::var("MATHLOOP_QA_MANIFEST_DIR").unwrap());
+        assert_ne!(root, mathloop_data_dir().unwrap());
+        let manifest: Value=serde_json::from_slice(&fs::read(source.join("manifest.json")).unwrap()).unwrap();
+        let before=connect(&root).unwrap();
+        let old: Vec<(String,String)>=before.prepare("SELECT key,value FROM review_store ORDER BY key").unwrap()
+            .query_map([],|r| Ok((r.get(0)?,r.get(1)?))).unwrap().map(Result::unwrap).collect();
+        let old_questions=load_overlay(&root,"1").unwrap();
+        drop(before);
+        let id=Uuid::new_v4().to_string();let staging=root.join("pdf-import-staging").join(&id);
+        fs::create_dir_all(&staging).unwrap();
+        for entry in fs::read_dir(&source).unwrap() { let entry=entry.unwrap();if entry.path().extension().is_some_and(|s| s=="png") {fs::copy(entry.path(),staging.join(entry.file_name())).unwrap();} }
+        let input=InputInfo {pdf_path:"paper.pdf".into(),source_fingerprint:manifest["sourceFingerprint"].as_str().unwrap().into(),profile_id:"math2-exams-2010-2026".into(),name:"数学二真题".into(),pages:52,answers_dir:None,bound_book_id:None};
+        let batch=commit(&root,&staging,&id,"qa-math2","数学二真题错题",&input,manifest).unwrap();assert_eq!(batch.imported,62);
+        let backup=root.join("real-math2.mathloop");library_backup(&root,"qa-math2",&backup).unwrap();
+        let restored=temp();assert_eq!(restore_library(&restored,"qa-math2",&backup).unwrap(),62);
+        assert_eq!(load_overlay(&restored,"qa-math2").unwrap(),load_overlay(&root,"qa-math2").unwrap());
+        undo(&root,&batch.batch_id).unwrap();assert!(load_overlay(&root,"qa-math2").unwrap().is_empty());
+        let after=connect(&root).unwrap();
+        let rows:Vec<(String,String)>=after.prepare("SELECT key,value FROM review_store ORDER BY key").unwrap()
+            .query_map([],|r| Ok((r.get(0)?,r.get(1)?))).unwrap().map(Result::unwrap).collect();
+        assert_eq!(old,rows);assert_eq!(old_questions,load_overlay(&root,"1").unwrap());
+        fs::remove_dir_all(restored).unwrap();
+    }
+
 }

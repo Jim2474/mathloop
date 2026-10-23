@@ -1,4 +1,12 @@
+export type PdfPageRef = {
+  pdfPath: string;
+  sourceFingerprint: string;
+  pdfPageNumber: number;
+  pageImageIndex: number;
+};
+
 export type Question = {
+  exam?: { year: number; subject: string; questionNumber: number; markedParts: string[] };
   pdfSource?: {
     pdfPath: string;
     pdfPageIndex: number;
@@ -16,6 +24,8 @@ export type Question = {
     importVersion?: number;
     fullImage?: string;
     pageImageNumbers?: number[];
+    questionPageRefs?: PdfPageRef[];
+    answerPageRefs?: PdfPageRef[];
     questionPageNumbers?: number[];
     answerPageNumbers?: number[];
     annotationColor?: "red" | "blue";

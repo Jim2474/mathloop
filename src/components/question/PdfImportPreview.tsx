@@ -1,6 +1,6 @@
 import type { PdfPreview } from "../../services/pdfImportService";
 import type { Question } from "../../types/question";
-import { getQuestionLocator } from "../../utils/questionLocation";
+import { getQuestionLocator, getQuestionImageSourceLabel } from "../../utils/questionLocation";
 import QuestionImage from "./QuestionImage";
 
 type Props = {
@@ -57,6 +57,11 @@ export default function PdfImportPreview({ jobId, bookName, preview, index, sele
 function PreviewQuestion({ jobId, question: q }: { jobId: string; question: Question }) {
   const imagePath = (name: string) => `pdf-preview://${jobId}/${encodeURIComponent(name)}`;
   const fullPath = (index: number, answer = false) => {
+    const refs = answer ? q.pdfSource?.answerPageRefs : q.pdfSource?.questionPageRefs;
+    if (refs) {
+      const full = q.pageImages?.[refs[index]?.pageImageIndex];
+      return full ? imagePath(full) : undefined;
+    }
     const numbers = answer ? q.pdfSource?.answerPageNumbers : q.pdfSource?.questionPageNumbers;
     const page = numbers?.[index] ?? q.pageStart;
     const fullIndex = q.pdfSource?.pageImageNumbers?.indexOf(page) ?? -1;
@@ -66,9 +71,9 @@ function PreviewQuestion({ jobId, question: q }: { jobId: string; question: Ques
   const answerEnd = q.answerMeta?.answerPageEnd;
   return <div className="mt-4 space-y-4">
     <p className="text-sm font-semibold">题目</p>
-    {q.questionImages.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 题目 ${index + 1}`} fullPagePath={fullPath(index)} fullPageLabel={getQuestionLocator(q)} />)}
-    {q.answerMeta?.hasAnswer === false ? <p className="rounded-2xl border border-black/5 p-4 text-sm text-ink/60">原书未提供参考答案，仅导入题目和引用图表。可在复习时记录思路并自行评分。</p> : <details className="rounded-2xl border border-black/5 p-4"><summary className="cursor-pointer text-sm font-semibold">查看解析 · PDF 第 {answerStart === answerEnd ? answerStart : `${answerStart}–${answerEnd}`} 页 · 书本第 {q.answerMeta?.printedPageNumber || "未识别"} 页</summary>
-      <div className="mt-4 space-y-4">{q.answerImages?.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 解析 ${index + 1}`} fullPagePath={fullPath(index, true)} />)}</div>
+    {q.questionImages.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 题目 ${index + 1}`} fullPagePath={fullPath(index)} fullPageLabel={getQuestionImageSourceLabel(q, index)} />)}
+    {q.answerMeta?.hasAnswer === false ? <p className="rounded-2xl border border-black/5 p-4 text-sm text-ink/60">原书未提供参考答案，仅导入题目和引用图表。可在复习时记录思路并自行评分。</p> : <details className="rounded-2xl border border-black/5 p-4"><summary className="cursor-pointer text-sm font-semibold">查看解析 · {q.answerMeta?.source ? `${q.answerMeta.source} · ` : ""}PDF 第 {answerStart === answerEnd ? answerStart : `${answerStart}–${answerEnd}`} 页{!q.exam && <> · 书本第 {q.answerMeta?.printedPageNumber || "未识别"} 页</>}</summary>
+      <div className="mt-4 space-y-4">{q.answerImages?.map((name, index) => <QuestionImage key={name} path={imagePath(name)} alt={`${q.questionNo} 解析 ${index + 1}`} fullPagePath={fullPath(index, true)} fullPageLabel={getQuestionImageSourceLabel(q, index, true)} />)}</div>
     </details>}
   </div>;
 }

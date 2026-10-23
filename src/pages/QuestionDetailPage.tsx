@@ -1,4 +1,4 @@
-import { getQuestionLocator, getQuestionSourceName } from "../utils/questionLocation";
+import { getQuestionLocator, getQuestionSourceName, getQuestionImageSourceLabel } from "../utils/questionLocation";
 import { Link, useParams } from "react-router-dom";
 import EmptyState from "../components/common/EmptyState";
 import QuestionImage from "../components/question/QuestionImage";
@@ -163,7 +163,7 @@ export default function QuestionDetailPage() {
                 path={path}
                 alt={`${question.questionNo} 题目截图 ${index + 1}`}
                 fullPagePath={getQuestionPageImagePath(question, index)}
-                fullPageLabel={getQuestionLocator(question)}
+                fullPageLabel={getQuestionImageSourceLabel(question, index)}
               />
             ))}
           </div>
@@ -182,7 +182,7 @@ export default function QuestionDetailPage() {
                 path={path}
                 alt={`${question.questionNo} 答案截图 ${index + 1}`}
                 fullPagePath={getQuestionPageImagePath(question, index, true)}
-                fullPageLabel={`${question.bookName} · 解析所在页`}
+                fullPageLabel={getQuestionImageSourceLabel(question, index, true)}
               />
             ))}
           </div>

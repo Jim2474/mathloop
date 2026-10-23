@@ -11,8 +11,8 @@ worker = root / 'scripts/pdf_import/app_worker.py'
 requirements = root / 'scripts/pdf_import/requirements-app.txt'
 output = root / 'src-tauri/resources/pdf-import-worker'
 build = root / '.pdf-worker-build'
-signature = hashlib.sha256(worker.read_bytes() + (worker.parent / 'control_textbook.py').read_bytes()
-                           + requirements.read_bytes() + os.uname().machine.encode()).hexdigest()
+inputs = sorted(worker.parent.glob("*.py")) + sorted(worker.parent.glob("*_catalog.json")) + [requirements]
+signature = hashlib.sha256(b"".join(p.read_bytes() for p in inputs) + os.uname().machine.encode()).hexdigest()
 if (output / 'mathloop-pdf-worker').is_file() and (output / 'build-signature').is_file() and (output / 'build-signature').read_text() == signature:
     print('PDF worker is up to date')
     sys.exit(0)
@@ -24,7 +24,7 @@ if not python.is_file():
     subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True)
 subprocess.run([str(python), '-m', 'pip', 'install', '-r', str(requirements)], check=True)
 subprocess.run([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
-                '--name', 'mathloop-pdf-worker', '--distpath', str(build / 'dist'),
+                '--name', 'mathloop-pdf-worker', '--add-data', str(worker.parent / 'math2_catalog.json') + ':.', '--distpath', str(build / 'dist'),
                 '--workpath', str(build / 'work'), '--specpath', str(build), str(worker)], check=True)
 source = build / 'dist/mathloop-pdf-worker'
 if output.exists():

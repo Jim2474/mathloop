@@ -16,7 +16,10 @@ import fitz
 from PIL import Image
 from control_textbook import FINGERPRINT as CONTROL_FINGERPRINT, PROFILE as CONTROL_PROFILE, extract_control, render as render_control_page
 
+from math2_exams import FINGERPRINT as MATH2_FINGERPRINT, PROFILE as MATH2_PROFILE, extract_math2, answer_matches
+
 PROFILES = {
+    MATH2_FINGERPRINT: MATH2_PROFILE,
     CONTROL_FINGERPRINT: CONTROL_PROFILE,
     "2982c22df232fcd23181ab865b147a0784e49259d7a0dd1bdb78d95a92da5006": {
         "id": "wzx-calculus-2027", "name": "武忠祥高数辅导讲义·强化", "pages": 315,
@@ -368,6 +371,8 @@ def main():
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--output")
     parser.add_argument("--existing")
+    parser.add_argument("--answers-dir")
+    parser.add_argument("--inspect-answers", action="store_true")
     parser.add_argument("--render-page", type=int)
     parser.add_argument("--fingerprint")
     args = parser.parse_args()
@@ -382,7 +387,11 @@ def main():
         fingerprint = source_fingerprint(doc)
         profile = PROFILES.get(fingerprint)
         if not profile or len(doc) != profile["pages"]:
-            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。目前支持提供的高数、线代讲义及自控课本；更改文件名仍可识别")
+            raise ValueError("这份 PDF 尚未验证裁题规则，暂不自动导入。目前支持提供的高数、线代讲义、自控课本及数学二真题套卷；更改文件名仍可识别")
+        if args.inspect_answers:
+            if profile["id"] != MATH2_PROFILE["id"]: raise ValueError("此资料无需独立答案目录")
+            print(json.dumps(answer_matches(args.answers_dir, source_fingerprint), ensure_ascii=False), flush=True)
+            return
         if args.inspect:
             print(json.dumps({"pdfPath": path, "sourceFingerprint": fingerprint,
                               "profileId": profile["id"], "name": profile["name"],
@@ -405,7 +414,9 @@ def main():
         output = Path(args.output)
         output.mkdir(parents=True, exist_ok=True)
         existing = json.loads(Path(args.existing).read_text()) if args.existing else []
-        if profile["id"] == CONTROL_PROFILE["id"]:
+        if profile["id"] == MATH2_PROFILE["id"]:
+            result = extract_math2(doc, fingerprint, path, output, existing, emit, args.answers_dir, source_fingerprint)
+        elif profile["id"] == CONTROL_PROFILE["id"]:
             result = extract_control(doc, fingerprint, path, output, existing, emit)
         else:
             result = extract(doc, profile, fingerprint, path, output, existing)

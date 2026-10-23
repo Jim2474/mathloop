@@ -16,6 +16,10 @@ export function enrichQuestionLocation(q: Question): Question {
 }
 
 export function getQuestionLocator(q: Question): string {
+  if (q.exam) {
+    const parts = q.exam.markedParts.length ? ` · 标记小问：${q.exam.markedParts.join("、")}` : "";
+    return `${q.exam.year}年${q.exam.subject}真题 · 第${q.exam.questionNumber}题${parts} · PDF 第${q.pageStart === q.pageEnd ? q.pageStart : `${q.pageStart}–${q.pageEnd}`}页`;
+  }
   const start = q.pdfSource?.pdfPageNumber ?? q.pageStart;
   const end = q.pageEnd || start;
   const pdf = Number.isFinite(start) && start > 0
@@ -26,4 +30,12 @@ export function getQuestionLocator(q: Question): string {
 
 export function getQuestionSourceName(q: Question): string {
   return q.pdfSource?.pdfPath.split(/[\\/]/).pop() || q.bookName;
+}
+
+export function getQuestionImageSourceLabel(q: Question, index = 0, answer = false): string {
+  const ref = (answer ? q.pdfSource?.answerPageRefs : q.pdfSource?.questionPageRefs)?.[index];
+  if (!ref) return answer ? `${q.bookName} · 解析所在页` : getQuestionLocator(q);
+  const name = ref.pdfPath.split(/[\\/]/).pop();
+  const location = q.exam ? `${q.exam.year}年${q.exam.subject}真题 · 第${q.exam.questionNumber}题` : q.bookName;
+  return `${location} · ${name} · PDF 第${ref.pdfPageNumber}页`;
 }

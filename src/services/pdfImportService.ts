@@ -3,6 +3,7 @@ import { invokeDesktop } from "./desktopBridge";
 
 export type PdfInput = {
   pdfPath: string; sourceFingerprint: string; profileId: string; name: string;
+  answersDir?: string;
   pages: number; boundBookId?: string | null;
 };
 export type PdfBatch = {
@@ -22,6 +23,8 @@ export function claimCompletedPdfJob(job: PdfJob, activeBookId: string | null): 
   appliedJobId = job.jobId;
   return true;
 }
+export type AnswerMatch = { year: number; status: "matched" | "missing" | "conflict"; pdfPath?: string; detail: string };
+export const pickAnswerDirectory = (input: PdfInput) => invokeDesktop<{ path: string; matches: AnswerMatch[] } | null>("pick_pdf_answer_directory", { input });
 export const pickPdfFile = () => invokeDesktop<PdfInput | null>("pick_pdf_import_file");
 export const getPdfJob = () => invokeDesktop<PdfJob>("get_pdf_import_job");
 export const cancelPdfJob = (jobId: string) => invokeDesktop<void>("cancel_pdf_import", { jobId });
@@ -40,7 +43,11 @@ export function mergeImportedQuestions(base: Question[], imported: Question[]): 
     if (ids.has(q.id)) throw new Error(`PDF 导入题目 ID 冲突：${q.id}，请检查数据后重试。`);
     ids.add(q.id);
   }
-  return [...base, ...imported];
+  const questions = [...base, ...imported];
+  if (questions.length && questions.every((q) => q.exam)) {
+    questions.sort((a, b) => a.exam!.year - b.exam!.year || a.exam!.questionNumber - b.exam!.questionNumber);
+  }
+  return questions;
 }
 
 export type PdfPreview = {
